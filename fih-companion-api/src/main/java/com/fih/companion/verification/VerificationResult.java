@@ -18,7 +18,8 @@ public record VerificationResult(
         List<String> accessZones,
         int maxAccess,          // 0 = unlimited
         int usesSoFar,
-        String holderName,      // billet only; null otherwise
+        String holderName,      // billet only; from legacy holder table
+        String affecteeA,       // from app-owned badge_affectation (null if none)
         Flags flags
 ) {
     public record Flags(
@@ -34,7 +35,7 @@ public record VerificationResult(
     static VerificationResult notFound(String type, String code) {
         return new VerificationResult(
                 type, Verdict.NOT_FOUND, null, code, null, null, null,
-                List.of(), 0, 0, null,
+                List.of(), 0, 0, null, null,
                 new Flags(false, false, false, false, false));
     }
 }

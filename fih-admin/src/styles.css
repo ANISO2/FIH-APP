@@ -1,0 +1,64 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Angular Material's prebuilt theme is loaded via angular.json "styles". */
+
+:root {
+  --primary: #1f5f8b;
+  --primary-700: #0d2b40;
+  --accent: #0f9d9d;
+  --ink: #1a2230;
+  --muted: #5b6470;
+  --bg: #f4f7fa;
+  --surface: #ffffff;
+  --line: #e2e6ec;
+  --success: #0a7c4a;
+  --warn: #b54708;
+}
+
+html, body { height: 100%; }
+body {
+  margin: 0;
+  font-family: 'Inter', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Material Symbols icon helper */
+.msr {
+  font-family: 'Material Symbols Rounded';
+  font-weight: normal;
+  font-style: normal;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  white-space: nowrap;
+  -webkit-font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Reusable card surface */
+.surface-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: 0 1px 3px rgba(16, 30, 54, .08);
+  transition: box-shadow .2s ease, transform .2s ease;
+}
+.surface-card.is-hoverable:hover {
+  box-shadow: 0 6px 20px rgba(16, 30, 54, .12);
+  transform: translateY(-2px);
+}
+
+/* Loading shimmer */
+.shimmer {
+  background: linear-gradient(90deg, #eef2f6 25%, #e2e8f0 37%, #eef2f6 63%);
+  background-size: 400% 100%;
+  animation: shimmer 1.4s ease infinite;
+  border-radius: 8px;
+}
+@keyframes shimmer { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
+
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

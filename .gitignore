@@ -1,0 +1,38 @@
+################
+# Angular
+################
+fih-admin/node_modules/
+fih-admin/.angular/
+fih-admin/dist/
+fih-admin/coverage/
+
+################
+# Spring Boot / Maven
+################
+fih-companion-api/target/
+*.class
+*.jar
+*.log
+
+################
+# IDE
+################
+.idea/
+**/.idea/
+
+################
+# Flutter  
+################
+.dart_tool/
+build/
+
+################
+# OS
+################
+.DS_Store
+Thumbs.db
+
+################
+# Personal files
+################
+Nouveau document texte.txt

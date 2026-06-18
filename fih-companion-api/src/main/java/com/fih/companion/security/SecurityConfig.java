@@ -15,6 +15,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  *  - GET  /api/events,/diagnostics : public (Phase 1 endpoints)
  *  - /api/verify/**                : ROLE_DEVICE or ROLE_ADMIN (mobile app)
  *  - /api/stats/**,/api/badge/**   : ROLE_ADMIN (locked now, built later)
+ *  - /api/invitations/**           : ROLE_ADMIN (the only write endpoints)
  *  - anything else                 : authenticated
  */
 @Configuration
@@ -32,7 +33,9 @@ public class SecurityConfig {
                 .requestMatchers("/api/auth/login").permitAll()
                 .requestMatchers("/api/events/**", "/api/diagnostics/**").permitAll()
                 .requestMatchers("/api/verify/**").hasAnyRole("DEVICE", "ADMIN")
-                .requestMatchers("/api/stats/**", "/api/badge/**").hasRole("ADMIN")
+                .requestMatchers("/api/stats/**", "/api/badges/**").hasRole("ADMIN")
+                // The only write endpoints in the app (badge name). Admin only.
+                .requestMatchers("/api/invitations/**").hasRole("ADMIN")
                 .anyRequest().authenticated())
             .exceptionHandling(e -> e.authenticationEntryPoint(
                 (req, res, ex) -> res.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized")))

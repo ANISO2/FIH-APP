@@ -76,6 +76,29 @@ fih:
       expiration-minutes: ${FIH_JWT_EXPIRATION_MINUTES:480}
     device-token: ${FIH_DEVICE_TOKEN:dev-device-token}
 
+  # Phase 6 — badge PDF generation. Forward slashes are SAFER than backslashes in
+  # YAML on Windows: a backslash starts an escape sequence, so "D:\photos" can be
+  # misread, while "D:/photos" is always taken literally. Java accepts both.
+  badge:
+    photo-dir: ${FIH_PHOTO_DIR:D:/Bitaka/bitaka/fih-companion/photos}
+    photo-key: codebarre            # filename field; falls back to numeroserie
+    photo-extensions: [jpg, jpeg, png]
+    width-mm: 100
+    height-mm: 150
+    zip-threshold: 150              # batches larger than this download as a ZIP
+
+    # 3.1 — PDF/badge generation is restricted to these invitation models only
+    # (modelebillet.reference). The availability list, item lists, photo-check
+    # and all generation endpoints expose/accept ONLY these. Edit with no
+    # recompile. Seeded with the Invitation family:
+    #   3  Invitation 1P
+    #   36 Invitation PDF
+    #   38 Invitation PDF-GAT
+    #   39 Invitation PDF-Artiste
+    #   40 Invitation PDF 2
+    #   41 Invitation PDF 3
+    invitation-models: ${FIH_INVITATION_MODELS:3,36,38,39,40,41}
+
 logging:
   level:
     org.hibernate.SQL: info

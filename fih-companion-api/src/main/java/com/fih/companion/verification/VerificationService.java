@@ -25,6 +25,7 @@ public class VerificationService {
     private final ModeleBilletRepository modeleBilletRepository;
     private final EvenementRepository evenementRepository;
     private final HolderRepository holderRepository;
+    private final BadgeAffectationRepository affectationRepository;
     private final AccessZoneResolver accessZoneResolver;
 
     public VerificationService(BilletRepository billetRepository,
@@ -32,12 +33,14 @@ public class VerificationService {
                                ModeleBilletRepository modeleBilletRepository,
                                EvenementRepository evenementRepository,
                                HolderRepository holderRepository,
+                               BadgeAffectationRepository affectationRepository,
                                AccessZoneResolver accessZoneResolver) {
         this.billetRepository = billetRepository;
         this.voucherRepository = voucherRepository;
         this.modeleBilletRepository = modeleBilletRepository;
         this.evenementRepository = evenementRepository;
         this.holderRepository = holderRepository;
+        this.affectationRepository = affectationRepository;
         this.accessZoneResolver = accessZoneResolver;
     }
 
@@ -58,6 +61,7 @@ public class VerificationService {
                 : evenementRepository.findById(b.getEvenement()).orElse(null);
         String holderName = holderRepository.findByBillet(b.getNumeroserie())
                 .map(this::fullName).orElse(null);
+        String affecteeA = affecteeName(b.getNumeroserie());
 
         int maxAccess = model == null ? 0 : model.getMaxaccess();
         int uses = b.getNombreacces();
@@ -84,6 +88,7 @@ public class VerificationService {
                 maxAccess,
                 uses,
                 holderName,
+                affecteeA,
                 new VerificationResult.Flags(
                         b.isActivation(),
                         b.isUtilisation(),
@@ -138,6 +143,7 @@ public class VerificationService {
                 maxAccess,
                 uses,
                 null,
+                affecteeName(v.getNumeroserie()),
                 new VerificationResult.Flags(
                         active,
                         used,
@@ -151,5 +157,11 @@ public class VerificationService {
         String last = h.getLastname() == null ? "" : h.getLastname().trim();
         String name = (first + " " + last).trim();
         return name.isEmpty() ? null : name;
+    }
+
+    /** The assigned "Affectée à" name for a serial, or null if none set. */
+    private String affecteeName(String numeroserie) {
+        return affectationRepository.findById(numeroserie)
+                .map(BadgeAffectation::getAffecteeA).orElse(null);
     }
 }
