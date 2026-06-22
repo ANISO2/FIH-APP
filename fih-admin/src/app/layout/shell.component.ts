@@ -15,7 +15,7 @@ interface NavItem { label: string; icon: string; path: string; }
     <div class="min-h-screen flex">
       <!-- Barre latérale -->
       <aside
-        class="fixed lg:static z-40 h-screen w-64 shrink-0 flex flex-col text-white transition-transform duration-200"
+        class="fixed lg:sticky lg:top-0 z-40 h-screen w-64 shrink-0 flex flex-col text-white transition-transform duration-200"
         [style.background]="'var(--primary-700)'"
         [class.-translate-x-full]="!open()"
         [class.lg:translate-x-0]="true">
@@ -63,9 +63,10 @@ interface NavItem { label: string; icon: string; path: string; }
 
       <!-- Contenu principal -->
       <div class="flex-1 min-w-0 flex flex-col">
-        <header class="sticky top-0 z-20 bg-bg/80 backdrop-blur border-b border-line">
+        <header class="sticky top-0 z-20 bg-surface border-b border-line shadow-[0_1px_3px_rgba(16,30,54,.08)]">
           <div class="px-4 sm:px-6 lg:px-8 h-16 flex items-center gap-3">
-            <button class="lg:hidden p-2 -ml-2 rounded-lg hover:bg-line" (click)="open.set(true)">
+            <button class="lg:hidden p-2 -ml-2 rounded-lg hover:bg-line" (click)="open.set(true)"
+                    aria-label="Ouvrir le menu">
               <span class="msr">menu</span>
             </button>
             <h1 class="text-lg font-semibold text-ink">FIH · Statistiques</h1>
@@ -98,6 +99,9 @@ export class ShellComponent implements OnInit {
     { label: 'Vue d\'ensemble', icon: 'dashboard', path: '' },
     { label: 'Événements', icon: 'event', path: 'events' },
     { label: 'Recette', icon: 'payments', path: 'recette' },
+    { label: 'Recette par guichet', icon: 'storefront', path: 'recette-guichet' },
+    { label: 'Tourniquets', icon: 'meeting_room', path: 'tourniquets' },
+    { label: 'Analyse des rejets', icon: 'report', path: 'rejets' },
     { label: 'Badges', icon: 'badge', path: 'badges' },
     { label: 'Portes', icon: 'sensor_door', path: 'gates' }
   ];

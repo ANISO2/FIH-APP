@@ -7,6 +7,7 @@ public record AffecteeDto(
         String numeroserie,
         String affecteeA,
         LocalDateTime updatedAt,
-        String updatedBy
+        String updatedBy,
+        LocalDateTime printedAt
 ) {
 }

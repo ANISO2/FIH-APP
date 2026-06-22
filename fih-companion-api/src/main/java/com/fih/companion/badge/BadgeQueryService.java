@@ -4,7 +4,6 @@ import com.fih.companion.access.AccessZoneResolver;
 import com.fih.companion.badge.dto.*;
 import com.fih.companion.badge.projection.AvailabilityProjection;
 import com.fih.companion.badge.projection.BadgeItemProjection;
-import com.fih.companion.badge.projection.CodeRowProjection;
 import com.fih.companion.domain.BadgeAffectation;
 import com.fih.companion.domain.Billet;
 import com.fih.companion.domain.ModeleBillet;
@@ -21,23 +20,22 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.nio.file.Path;
 import java.time.LocalDate;
 import java.util.*;
 
 /**
- * Read-only data side of the badge feature: counts, item lists, photo coverage.
+ * Read-only data side of the badge feature: counts, item lists, poster coverage.
  *
- * INVITATION-ONLY (3.1)
- * ---------------------
- * PDF/badge generation is restricted to invitation-type models. The set of
- * allowed modelebillet.reference values lives in application.yml
- * (fih.badge.invitation-models) via {@link BadgeProperties}. Here we:
- *   - filter the availability list down to invitation models only, and
- *   - guard every per-model entry point (items, photoCheck, batch) and the
- *     single-code entry point so a non-invitation model is rejected with 404
- *     even if a client calls the API directly.
- * Nothing else about the PDF pipeline changes.
+ * INVITATION-ONLY — generation is restricted to invitation models
+ * (fih.badge.invitation-models via {@link BadgeProperties}).
+ *
+ * POSTER COVERAGE (Change A) — there is no per-ticket photo any more. Coverage is
+ * per EVENT: does the event have its own poster (slug(eventTitle).{ext})?
+ * {@link PosterResolver} answers that exactly the way {@link BadgePdfService}
+ * finds the poster it prints, so the indicator matches reality.
+ *
+ * The PDF renderer resolves its own poster from the event title, so the
+ * BadgeRecord no longer carries a per-ticket image (photo = null).
  */
 @Service
 @Transactional(readOnly = true)
@@ -51,13 +49,13 @@ public class BadgeQueryService {
     private final HolderRepository holderRepo;
     private final BadgeAffectationRepository affectationRepo;
     private final AccessZoneResolver zones;
-    private final PhotoResolver photos;
+    private final PosterResolver posters;
     private final BadgeProperties props;
 
     public BadgeQueryService(BadgeRepository badgeRepo, BilletRepository billetRepo, VoucherRepository voucherRepo,
                              ModeleBilletRepository modeleRepo, EvenementRepository eventRepo,
                              HolderRepository holderRepo, BadgeAffectationRepository affectationRepo,
-                             AccessZoneResolver zones, PhotoResolver photos,
+                             AccessZoneResolver zones, PosterResolver posters,
                              BadgeProperties props) {
         this.badgeRepo = badgeRepo;
         this.billetRepo = billetRepo;
@@ -67,50 +65,49 @@ public class BadgeQueryService {
         this.holderRepo = holderRepo;
         this.affectationRepo = affectationRepo;
         this.zones = zones;
-        this.photos = photos;
+        this.posters = posters;
         this.props = props;
     }
 
     // -------------------------------------------------------------- availability
-    public List<AvailabilityDto> availability(Integer eventId, boolean withPhotoCheck) {
+    public List<AvailabilityDto> availability(Integer eventId) {
         List<AvailabilityProjection> rows = badgeRepo.availability(eventId).stream()
-                // 3.1 — only expose invitation models in the availability list.
                 .filter(r -> props.isInvitationModel(r.getModelId()))
                 .toList();
 
-        // Optional, slower: count photos present per (event, model).
-        Map<String, int[]> photoCounts = withPhotoCheck ? photoCountsByGroup(eventId) : Map.of();
+        // Change A — per-event poster check, cached so we hit the disk once per title.
+        Map<String, Boolean> posterCache = new HashMap<>();
 
         List<AvailabilityDto> out = new ArrayList<>(rows.size());
         for (AvailabilityProjection r : rows) {
-            Integer withPhoto = null, missing = null;
-            if (withPhotoCheck) {
-                int[] wc = photoCounts.getOrDefault(r.getEventId() + ":" + r.getModelId(), new int[]{0, 0});
-                withPhoto = wc[0];
-                missing = (int) r.getInjectedCount() - wc[0];
-            }
+            boolean hasPoster = posterCache.computeIfAbsent(
+                    r.getEventTitle() == null ? "" : r.getEventTitle(), posters::exists);
             out.add(new AvailabilityDto(
                     r.getEventId(), r.getEventTitle(), r.getEventDate().toLocalDate(),
                     r.getModelId(), r.getModelName(), zones.resolve(r.getModelId()),
                     (int) r.getInjectedCount(), (int) r.getBilletCount(), (int) r.getVoucherCount(),
-                    withPhoto, missing));
+                    hasPoster));
         }
         return out;
     }
 
-    private Map<String, int[]> photoCountsByGroup(Integer eventId) {
-        Map<String, int[]> map = new HashMap<>();
-        for (CodeRowProjection c : badgeRepo.codeRows(eventId)) {
-            // Only count photos for invitation models (matches the filtered list).
-            if (!props.isInvitationModel(c.getModelId())) {
-                continue;
+    // ------------------------------------------------------------- missing posters (§6)
+    /** Events that have invitations but no event-specific poster on disk yet. */
+    public List<MissingPosterDto> missingPosters() {
+        Map<Integer, MissingPosterDto> byEvent = new LinkedHashMap<>();
+        for (AvailabilityProjection r : badgeRepo.availability(null)) {
+            if (!props.isInvitationModel(r.getModelId())) continue;
+            if (posters.exists(r.getEventTitle())) continue;
+            int ev = r.getEventId();
+            int add = (int) r.getInjectedCount();
+            MissingPosterDto cur = byEvent.get(ev);
+            if (cur == null) {
+                byEvent.put(ev, new MissingPosterDto(ev, r.getEventTitle(), r.getEventDate().toLocalDate(), add));
+            } else {
+                byEvent.put(ev, new MissingPosterDto(ev, cur.eventTitle(), cur.eventDate(), cur.invitationCount() + add));
             }
-            String key = c.getEventId() + ":" + c.getModelId();
-            int[] wc = map.computeIfAbsent(key, k -> new int[]{0, 0});
-            if (photos.exists(c.getCodebarre(), c.getNumeroserie())) wc[0]++;
-            else wc[1]++;
         }
-        return map;
+        return new ArrayList<>(byEvent.values());
     }
 
     // -------------------------------------------------------------- items page
@@ -126,21 +123,9 @@ public class BadgeQueryService {
     }
 
     private BadgeItemDto toItemDto(BadgeItemProjection p) {
+        java.time.LocalDateTime printedAt = p.getPrintedAt() == null ? null : p.getPrintedAt().toLocalDateTime();
         return new BadgeItemDto(p.getType(), p.getNumeroserie(), p.getCodebarre(),
-                p.getHolderName(), p.getAffecteeA(), photos.exists(p.getCodebarre(), p.getNumeroserie()));
-    }
-
-    // -------------------------------------------------------------- photo check
-    public PhotoCheckDto photoCheck(int eventId, int modelId) {
-        requireInvitation(modelId);
-        List<BadgeItemProjection> all = badgeRepo.allItems(eventId, modelId);
-        List<String> missing = new ArrayList<>();
-        int withPhoto = 0;
-        for (BadgeItemProjection p : all) {
-            if (photos.exists(p.getCodebarre(), p.getNumeroserie())) withPhoto++;
-            else missing.add(p.getCodebarre());
-        }
-        return new PhotoCheckDto(all.size(), withPhoto, missing.size(), missing);
+                p.getHolderName(), p.getAffecteeA(), printedAt);
     }
 
     // -------------------------------------------------------------- build records for PDF
@@ -170,10 +155,10 @@ public class BadgeQueryService {
             if (wanted != null && !wanted.contains(p.getCodebarre()) && !wanted.contains(p.getNumeroserie())) {
                 continue;
             }
+            // photo = null: the PDF resolves the event poster itself from the title.
             out.add(new BadgeRecord(p.getType(), p.getNumeroserie(), p.getCodebarre(), p.getHolderName(),
                     p.getAffecteeA(),
-                    e.getTitre(), e.getDdate(), m == null ? null : m.getModele(), zoneList,
-                    photos.resolve(p.getCodebarre(), p.getNumeroserie()).orElse(null)));
+                    e.getTitre(), e.getDdate(), m == null ? null : m.getModele(), zoneList, null));
         }
         if (out.isEmpty()) throw notFound("no records for event " + eventId + " / model " + modelId);
         return out;
@@ -183,12 +168,11 @@ public class BadgeQueryService {
                                Integer eventId, Integer modelId) {
         Evenement e = eventId == null ? null : eventRepo.findById(eventId).orElse(null);
         ModeleBillet m = modelId == null ? null : modeleRepo.findById(modelId).orElse(null);
-        Path photo = photos.resolve(codebarre, numeroserie).orElse(null);
         LocalDate date = e == null ? null : e.getDdate();
         String affectee = affecteeName(numeroserie);
         return new BadgeRecord(type, numeroserie, codebarre, holder, affectee,
                 e == null ? null : e.getTitre(), date,
-                m == null ? null : m.getModele(), zones.resolve(modelId), photo);
+                m == null ? null : m.getModele(), zones.resolve(modelId), null);
     }
 
     /** The assigned "Affectée à" name for a serial, or null if none set. */
@@ -202,7 +186,7 @@ public class BadgeQueryService {
         return full.isEmpty() ? null : full;
     }
 
-    /** 3.1 guard: reject any model that is not a configured invitation model. */
+    /** Guard: reject any model that is not a configured invitation model. */
     private void requireInvitation(Integer modelId) {
         if (!props.isInvitationModel(modelId)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND,

@@ -2,7 +2,6 @@ package com.fih.companion.badge;
 
 import com.fih.companion.badge.projection.AvailabilityProjection;
 import com.fih.companion.badge.projection.BadgeItemProjection;
-import com.fih.companion.badge.projection.CodeRowProjection;
 import com.fih.companion.domain.Tturnstile;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.Repository;
@@ -15,14 +14,14 @@ import java.util.List;
  * rows the legacy team created. Aliases are quoted so they bind to the projection
  * getters (PostgreSQL lowercases unquoted aliases).
  *
- * AFFECTÉE À (3.3)
- * ----------------
+ * AFFECTÉE À / PRINTED_AT
+ * -----------------------
  * The item queries LEFT JOIN our app-owned badge_affectation table on numeroserie
- * to surface the assigned name ("affecteeA"). It is a LEFT JOIN, so records with
- * no name set simply return NULL — nothing is hidden. The name is also added to
- * the free-text search so admins can find a record by the name they typed. This
- * is the only place these read queries touch badge_affectation; the legacy tables
- * stay strictly read-only.
+ * to surface the assigned name ("affecteeA") and the print stamp ("printedAt").
+ * It is a LEFT JOIN, so records with no name set simply return NULL — nothing is
+ * hidden. The name is also added to the free-text search so admins can find a
+ * record by the name they typed. This is the only place these read queries touch
+ * badge_affectation; the legacy tables stay strictly read-only.
  */
 public interface BadgeRepository extends Repository<Tturnstile, Integer> {
 
@@ -47,17 +46,17 @@ public interface BadgeRepository extends Repository<Tturnstile, Integer> {
 
     @Query(value = """
             SELECT type AS "type", numeroserie AS "numeroserie", codebarre AS "codebarre",
-                   holderName AS "holderName", affecteeA AS "affecteeA"
+                   holderName AS "holderName", affecteeA AS "affecteeA", printedAt AS "printedAt"
             FROM (
               SELECT 'BILLET' AS type, b.numeroserie, b.codebarre,
                      NULLIF(trim(coalesce(h.firstname, '') || ' ' || coalesce(h.lastname, '')), '') AS holderName,
-                     ba.affectee_a AS affecteeA
+                     ba.affectee_a AS affecteeA, ba.printed_at AS printedAt
               FROM billet b
               LEFT JOIN holder h ON h.billet = b.numeroserie
               LEFT JOIN badge_affectation ba ON ba.numeroserie = b.numeroserie
               WHERE b.evenement = :eventId AND b.modelebillet = :modelId
               UNION ALL
-              SELECT 'VOUCHER', v.numeroserie, v.codebarre, NULL, ba.affectee_a
+              SELECT 'VOUCHER', v.numeroserie, v.codebarre, NULL, ba.affectee_a, ba.printed_at
               FROM voucher v
               LEFT JOIN badge_affectation ba ON ba.numeroserie = v.numeroserie
               WHERE v.evenement = :eventId AND v.modelebillet = :modelId
@@ -101,31 +100,21 @@ public interface BadgeRepository extends Repository<Tturnstile, Integer> {
                     @Param("modelId") int modelId,
                     @Param("search") String search);
 
-    /** All records for a model (no paging) — used for "generate all" and photo-check. */
+    /** All records for a model (no paging) — used for "generate all". */
     @Query(value = """
             SELECT 'BILLET' AS "type", b.numeroserie AS "numeroserie", b.codebarre AS "codebarre",
                    NULLIF(trim(coalesce(h.firstname, '') || ' ' || coalesce(h.lastname, '')), '') AS "holderName",
-                   ba.affectee_a AS "affecteeA"
+                   ba.affectee_a AS "affecteeA", ba.printed_at AS "printedAt"
             FROM billet b
             LEFT JOIN holder h ON h.billet = b.numeroserie
             LEFT JOIN badge_affectation ba ON ba.numeroserie = b.numeroserie
             WHERE b.evenement = :eventId AND b.modelebillet = :modelId
             UNION ALL
-            SELECT 'VOUCHER', v.numeroserie, v.codebarre, NULL, ba.affectee_a
+            SELECT 'VOUCHER', v.numeroserie, v.codebarre, NULL, ba.affectee_a, ba.printed_at
             FROM voucher v
             LEFT JOIN badge_affectation ba ON ba.numeroserie = v.numeroserie
             WHERE v.evenement = :eventId AND v.modelebillet = :modelId
             ORDER BY 2
             """, nativeQuery = true)
     List<BadgeItemProjection> allItems(@Param("eventId") int eventId, @Param("modelId") int modelId);
-
-    /** Light rows for festival-wide photo coverage counting. */
-    @Query(value = """
-            SELECT evenement AS "eventId", modelebillet AS "modelId", codebarre AS "codebarre", numeroserie AS "numeroserie"
-            FROM billet WHERE (:eventId IS NULL OR evenement = :eventId)
-            UNION ALL
-            SELECT evenement, modelebillet, codebarre, numeroserie
-            FROM voucher WHERE (:eventId IS NULL OR evenement = :eventId)
-            """, nativeQuery = true)
-    List<CodeRowProjection> codeRows(@Param("eventId") Integer eventId);
 }

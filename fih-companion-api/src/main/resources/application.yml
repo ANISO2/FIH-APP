@@ -40,6 +40,14 @@ spring:
 # App-specific configuration.
 # ---------------------------------------------------------------------------
 fih:
+  # §5 — Recette aggregates short cache. Seconds a Recette résumé / détaillée
+  # header response may be reused before being recomputed. The "Actualiser"
+  # button (?refresh=true) always bypasses it. Set to 0 to disable (always live).
+  # Trade-off: higher = fewer queries but up to <value>s stale; the queries are
+  # cheap (tiny `generation` table) so 30s is plenty. The per-model rows loaded
+  # on expand are never cached — they always reflect the latest counters.
+  recette:
+    cache-ttl-seconds: ${FIH_RECETTE_CACHE_TTL:30}
   photos:
     folder: ${FIH_PHOTOS_FOLDER:./photos}
 
@@ -99,6 +107,26 @@ fih:
     #   41 Invitation PDF 3
     invitation-models: ${FIH_INVITATION_MODELS:3,36,38,39,40,41}
 
+    # ===================== NEW: e-ticket layout =====================
+    # Landscape e-ticket page size (matches the_format.jpeg, ratio 2.2).
+    ticket-width-mm: 220
+    ticket-height-mm: 100
+
+    # Event posters. Resolved per-ticket as slug(eventTitle).{ext}
+    # e.g. "Salif Keita" -> salif-keita.jpg ; falls back to poster-default.
+    poster-dir: ${FIH_POSTER_DIR:D:/Bitaka/bitaka/fih-companion/posters}
+    poster-default: poster-default.jpg
+    poster-extensions: [jpg, jpeg, png]
+
+    # The evenement table has no time column (only ddate), so showtime is
+    # config-driven. Change here without recompiling.
+    show-time: ${FIH_SHOW_TIME:22:00}
+    # ================================================================
+    # Optional per-event overrides, keyed by event date (yyyy-MM-dd = ddate).
+    # Anything not listed uses show-time above. Leave empty if every show is 22:00.
+
+
 logging:
   level:
     org.hibernate.SQL: info
+

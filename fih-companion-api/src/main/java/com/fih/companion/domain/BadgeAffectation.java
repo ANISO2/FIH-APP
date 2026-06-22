@@ -23,6 +23,13 @@ import java.time.LocalDateTime;
  * purely logical — we store the same serial and join on it only when we need the
  * name. Because the id is the serial itself, JpaRepository.save() naturally
  * "upserts": it INSERTs a new serial and UPDATEs an existing one.
+ *
+ * ONE-TIME RULE (Change B): once a row exists the name is permanent. The service
+ * refuses to overwrite affectee_a; only printed_at is allowed to change.
+ *
+ * printed_at (§6): nullable timestamp set when a PDF for this serial is
+ * generated. It lets the UI show "affecté" vs "imprimé" without breaking the
+ * one-time rule (the name never changes; only this stamp does).
  */
 @Entity
 @Table(name = "badge_affectation")
@@ -46,6 +53,10 @@ public class BadgeAffectation {
     /** Which admin set it (the JWT username). */
     @Column(name = "updated_by", length = 255)
     private String updatedBy;
+
+    /** §6 — when a PDF for this serial was last generated (null = never printed). */
+    @Column(name = "printed_at")
+    private LocalDateTime printedAt;
 
     /** Required by JPA. */
     protected BadgeAffectation() {

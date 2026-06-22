@@ -1,7 +1,10 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpResponse } from '@angular/common/http';
 import { Observable } from 'rxjs';
-import { Availability, BadgeItem, Page, PhotoCheck, Affectee } from './models';
+import {
+  Availability, BadgeItem, Page, Affectee,
+  MissingPoster, LotRequest, LotPreview, LotResult
+} from './models';
 
 /** Badge data + PDF download calls. PDFs come back as Blobs we save to disk. */
 @Injectable({ providedIn: 'root' })
@@ -9,19 +12,39 @@ export class BadgeService {
   constructor(private http: HttpClient) {}
 
   /**
-   * Set/update the "Affectée à" name for an invitation serial. This is the only
-   * write call in the backoffice; it upserts into the app-owned badge_affectation
-   * table via PUT /api/invitations/{numeroserie}/affectee.
+   * Set the "Affectée à" name for ONE invitation serial (Change B). One-time:
+   * the backend returns 409 if the serial is already assigned.
    */
   saveAffectee(numeroserie: string, name: string): Observable<Affectee> {
     return this.http.put<Affectee>(
       `/api/invitations/${encodeURIComponent(numeroserie)}/affectee`, { name });
   }
 
-  availability(eventId?: number, withPhotoCheck = false): Observable<Availability[]> {
-    let url = `/api/badges/availability?withPhotoCheck=${withPhotoCheck}`;
-    if (eventId != null) url += `&eventId=${eventId}`;
+  // ---- Change C: lot (affectation par plage de séries) ----
+  /** Dry-run a lot: matched invitations, proposed names, conflicts/warnings. */
+  lotPreview(req: LotRequest): Observable<LotPreview> {
+    return this.http.post<LotPreview>('/api/invitations/affectation/lot/preview', req);
+  }
+  /** Assign a whole lot immutably (409 if any serial in range is already named). */
+  lotAssign(req: LotRequest): Observable<LotResult> {
+    return this.http.post<LotResult>('/api/invitations/affectation/lot', req);
+  }
+  /** Download the CSV manifest (nom, numeroserie, codebarre, evenement) for a range. */
+  lotManifest(startSerie: string, endSerie: string): Observable<HttpResponse<Blob>> {
+    const qs = `startSerie=${encodeURIComponent(startSerie)}&endSerie=${encodeURIComponent(endSerie)}`;
+    return this.http.get(`/api/invitations/affectation/lot/manifest?${qs}`,
+      { observe: 'response', responseType: 'blob' });
+  }
+
+  availability(eventId?: number): Observable<Availability[]> {
+    let url = `/api/badges/availability`;
+    if (eventId != null) url += `?eventId=${eventId}`;
     return this.http.get<Availability[]>(url);
+  }
+
+  /** §6 — events with invitations but no poster file yet. */
+  missingPosters(): Observable<MissingPoster[]> {
+    return this.http.get<MissingPoster[]>('/api/badges/posters/missing');
   }
 
   items(eventId: number, modelId: number, page: number, size: number, search?: string): Observable<Page<BadgeItem>> {
@@ -30,18 +53,16 @@ export class BadgeService {
     return this.http.get<Page<BadgeItem>>(url);
   }
 
-  photoCheck(eventId: number, modelId: number): Observable<PhotoCheck> {
-    return this.http.get<PhotoCheck>(`/api/badges/photo-check?eventId=${eventId}&modelId=${modelId}`);
-  }
-
   // observe: 'response' so we can read the Content-Disposition filename header.
   single(type: string, code: string): Observable<HttpResponse<Blob>> {
     return this.http.get(`/api/badges/single?type=${type}&code=${encodeURIComponent(code)}`,
       { observe: 'response', responseType: 'blob' });
   }
 
-  batch(eventId: number, modelId: number, codes: string[] | null, layout: 'single' | 'sheet'): Observable<HttpResponse<Blob>> {
-    return this.http.post(`/api/badges/batch?layout=${layout}`,
+  // Change B: the « Planche A4 » layout is gone — batch always produces one
+  // ticket per page, so there is no longer a layout parameter.
+  batch(eventId: number, modelId: number, codes: string[] | null): Observable<HttpResponse<Blob>> {
+    return this.http.post(`/api/badges/batch`,
       { eventId, modelId, codes: codes && codes.length ? codes : null },
       { observe: 'response', responseType: 'blob' });
   }

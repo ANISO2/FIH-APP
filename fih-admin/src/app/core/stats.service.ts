@@ -3,7 +3,8 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import {
   EntryByDay, EventDetail, EventRollup, Gate, Overview, TicketTypes,
-  RecetteSummary, RecetteDetail
+  RecetteSummary, RecetteEventHeader, RecetteModelRow,
+  RecetteGuichetSummary, RecetteGuichetDetail, TourniquetEvent, RejetsData
 } from './models';
 
 /**
@@ -19,10 +20,11 @@ import {
 export class StatsService {
   constructor(private http: HttpClient) {}
 
-  private withYear(year: number | null | undefined): { params?: HttpParams } {
-    return (year === null || year === undefined)
-      ? {}
-      : { params: new HttpParams().set('year', String(year)) };
+  private withYear(year: number | null | undefined, refresh = false): { params?: HttpParams } {
+    let params = new HttpParams();
+    if (year !== null && year !== undefined) params = params.set('year', String(year));
+    if (refresh) params = params.set('refresh', 'true');
+    return params.keys().length ? { params } : {};
   }
 
   /** Distinct festival years present in the DB (most-recent first). */
@@ -48,10 +50,34 @@ export class StatsService {
   }
 
   // ---- Recette ----
-  recetteSummary(year?: number | null): Observable<RecetteSummary[]> {
-    return this.http.get<RecetteSummary[]>('/api/stats/recette/summary', this.withYear(year));
+  // `refresh=true` (the "Actualiser" button) bypasses the short server cache.
+  recetteSummary(year?: number | null, refresh = false): Observable<RecetteSummary[]> {
+    return this.http.get<RecetteSummary[]>('/api/stats/recette/summary', this.withYear(year, refresh));
   }
-  recetteDetail(year?: number | null): Observable<RecetteDetail[]> {
-    return this.http.get<RecetteDetail[]>('/api/stats/recette/detail', this.withYear(year));
+  /** Détaillée: the collapsible panel headers (per-event totals). */
+  recetteDetailHeaders(year?: number | null, refresh = false): Observable<RecetteEventHeader[]> {
+    return this.http.get<RecetteEventHeader[]>('/api/stats/recette/detail', this.withYear(year, refresh));
+  }
+  /** Détaillée: per-model rows for one event, fetched when its panel expands. */
+  recetteDetailRows(eventId: number): Observable<RecetteModelRow[]> {
+    return this.http.get<RecetteModelRow[]>(`/api/stats/recette/detail/${eventId}`);
+  }
+
+  // ---- Recette par guichet (§5.2) ----
+  recetteGuichetSummary(year?: number | null): Observable<RecetteGuichetSummary[]> {
+    return this.http.get<RecetteGuichetSummary[]>('/api/stats/recette/guichet/summary', this.withYear(year));
+  }
+  recetteGuichetDetail(year?: number | null): Observable<RecetteGuichetDetail[]> {
+    return this.http.get<RecetteGuichetDetail[]>('/api/stats/recette/guichet/detail', this.withYear(year));
+  }
+
+  // ---- Statistique des tourniquets (§5.3) ----
+  tourniquets(year?: number | null): Observable<TourniquetEvent[]> {
+    return this.http.get<TourniquetEvent[]>('/api/stats/tourniquets', this.withYear(year));
+  }
+
+  // ---- Analyse des rejets (Part C) ----
+  rejets(year?: number | null): Observable<RejetsData> {
+    return this.http.get<RejetsData>('/api/stats/rejets', this.withYear(year));
   }
 }

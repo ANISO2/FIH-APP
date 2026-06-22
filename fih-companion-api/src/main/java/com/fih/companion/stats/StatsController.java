@@ -64,13 +64,51 @@ public class StatsController {
     }
 
     // ----------------------------------------------------------- Recette
+    // The summary and the détaillée panel HEADERS support an optional
+    // ?refresh=true (the "Actualiser" button) which bypasses the short-TTL
+    // server cache and reloads live. The per-event ROWS are loaded lazily, one
+    // event at a time, when a panel is expanded.
     @GetMapping("/recette/summary")
-    public List<RecetteSummaryDto> recetteSummary(@RequestParam(required = false) Integer year) {
-        return service.recetteSummary(year);
+    public List<RecetteSummaryDto> recetteSummary(
+            @RequestParam(required = false) Integer year,
+            @RequestParam(required = false, defaultValue = "false") boolean refresh) {
+        return service.recetteSummary(year, refresh);
     }
 
+    /** Détaillée — one collapsible panel header (totals) per event. */
     @GetMapping("/recette/detail")
-    public List<RecetteDetailDto> recetteDetail(@RequestParam(required = false) Integer year) {
-        return service.recetteDetail(year);
+    public List<RecetteEventHeaderDto> recetteDetail(
+            @RequestParam(required = false) Integer year,
+            @RequestParam(required = false, defaultValue = "false") boolean refresh) {
+        return service.recetteDetailHeaders(year, refresh);
+    }
+
+    /** Détaillée — per-model rows for one event, loaded on expand. */
+    @GetMapping("/recette/detail/{eventId}")
+    public List<RecetteModelRowDto> recetteDetailRows(@PathVariable int eventId) {
+        return service.recetteDetailRows(eventId);
+    }
+
+    // ------------------------------------------------- Recette par guichet (§5.2)
+    @GetMapping("/recette/guichet/summary")
+    public List<RecetteGuichetSummaryDto> recetteGuichetSummary(@RequestParam(required = false) Integer year) {
+        return service.recetteGuichetSummary(year);
+    }
+
+    @GetMapping("/recette/guichet/detail")
+    public List<RecetteGuichetDetailDto> recetteGuichetDetail(@RequestParam(required = false) Integer year) {
+        return service.recetteGuichetDetail(year);
+    }
+
+    // --------------------------------------------- Statistique des tourniquets (§5.3)
+    @GetMapping("/tourniquets")
+    public List<TourniquetEventDto> tourniquets(@RequestParam(required = false) Integer year) {
+        return service.tourniquets(year);
+    }
+
+    // --------------------------------------------- Analyse des rejets (Part C)
+    @GetMapping("/rejets")
+    public RejetsDto rejets(@RequestParam(required = false) Integer year) {
+        return service.rejets(year);
     }
 }
