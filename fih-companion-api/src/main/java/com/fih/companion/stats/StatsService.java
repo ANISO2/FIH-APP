@@ -30,46 +30,52 @@ public class StatsService {
     private final StatsRepository repo;
 
     /**
-     * Optional short-TTL cache for the Recette aggregates (Change §5).
-     * 0 disables it. Configurable via fih.recette.cache-ttl-seconds.
+     * Optional short-TTL cache for the HEAVY stats aggregates (Change §5):
+     * Recette résumé/détaillée headers, the tourniquet breakdown, and the rejets
+     * analysis. 0 disables it. Configured via fih.stats.cache-ttl-seconds (falls
+     * back to the older fih.recette.cache-ttl-seconds, else 30).
      *
-     * Trade-off: a non-zero TTL means a value can be up to <ttl> seconds stale,
-     * but repeated views inside that window cost ONE query instead of many. For
-     * Recette the underlying queries are already cheap (they read the tiny,
-     * non-growing `generation` table), so this is a light optimisation, not a
-     * necessity — keep it small (30 s) or set it to 0 to always read live.
+     * Why this matters on a SHARED database during a spike: tourniquets and
+     * rejets scan the large, fast-growing `tturnstile` table. When the gates open
+     * and several admins open the dashboards, those scans pile onto the same
+     * database the turnstiles are hammering. A 30 s TTL means repeated dashboard
+     * views inside that window cost ONE scan instead of one per view — a big drop
+     * in load — while the numbers stay "30 s fresh", which is plenty for an
+     * operator. The "Actualiser" button (refresh=true) always bypasses it for an
+     * on-demand live read. Verdicts/verification are NEVER cached (see
+     * VerificationService) — only these read-only aggregates are.
      */
-    private final long recetteCacheTtlSeconds;
-    private final ConcurrentHashMap<String, CacheEntry> recetteCache = new ConcurrentHashMap<>();
+    private final long statsCacheTtlSeconds;
+    private final ConcurrentHashMap<String, CacheEntry> statsCache = new ConcurrentHashMap<>();
 
     private record CacheEntry(long expiresAtMillis, Object value) {}
 
     public StatsService(StatsRepository repo,
-                        @Value("${fih.recette.cache-ttl-seconds:30}") long recetteCacheTtlSeconds) {
+                        @Value("${fih.stats.cache-ttl-seconds:${fih.recette.cache-ttl-seconds:30}}") long statsCacheTtlSeconds) {
         this.repo = repo;
-        this.recetteCacheTtlSeconds = recetteCacheTtlSeconds;
+        this.statsCacheTtlSeconds = statsCacheTtlSeconds;
     }
 
     /**
      * Returns a cached value if present and fresh, otherwise runs {@code loader},
      * stores it and returns it. {@code refresh=true} (the "Actualiser" button)
      * forces a reload and refreshes the entry. TTL <= 0 bypasses the cache
-     * entirely. Stored values are immutable DTO lists, so sharing them is safe.
+     * entirely. Stored values are immutable DTOs, so sharing them is safe.
      */
     @SuppressWarnings("unchecked")
     private <T> T cached(String key, boolean refresh, Supplier<T> loader) {
-        if (recetteCacheTtlSeconds <= 0) {
+        if (statsCacheTtlSeconds <= 0) {
             return loader.get();
         }
         long now = System.currentTimeMillis();
         if (!refresh) {
-            CacheEntry e = recetteCache.get(key);
+            CacheEntry e = statsCache.get(key);
             if (e != null && e.expiresAtMillis() > now) {
                 return (T) e.value();
             }
         }
         T value = loader.get();
-        recetteCache.put(key, new CacheEntry(now + recetteCacheTtlSeconds * 1000L, value));
+        statsCache.put(key, new CacheEntry(now + statsCacheTtlSeconds * 1000L, value));
         return value;
     }
 
@@ -201,7 +207,11 @@ public class StatsService {
      * header totals (Audience, Transactions Billets/Vouchers, Tourniquets) from the
      * rows so they always match the table. Event order from the query is preserved.
      */
-    public List<TourniquetEventDto> tourniquets(Integer year) {
+    public List<TourniquetEventDto> tourniquets(Integer year, boolean refresh) {
+        return cached("tourniquets:" + year, refresh, () -> loadTourniquets(year));
+    }
+
+    private List<TourniquetEventDto> loadTourniquets(Integer year) {
         List<TourniquetEventDto> out = new java.util.ArrayList<>();
         java.util.Map<Integer, Integer> indexByEvent = new java.util.HashMap<>();
         // mutable accumulators per event, indexed in parallel with `out`
@@ -244,7 +254,11 @@ public class StatsService {
     }
 
     // --------------------------------------------------- Analyse des rejets
-    public RejetsDto rejets(Integer year) {
+    public RejetsDto rejets(Integer year, boolean refresh) {
+        return cached("rejets:" + year, refresh, () -> loadRejets(year));
+    }
+
+    private RejetsDto loadRejets(Integer year) {
         var kpi = repo.rejetsKpi(year);
         long rejets = kpi == null ? 0 : kpi.getRejets();
         long total = kpi == null ? 0 : kpi.getTotal();

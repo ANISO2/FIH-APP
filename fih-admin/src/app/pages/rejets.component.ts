@@ -309,12 +309,12 @@ export class RejetsComponent {
     });
   }
 
-  actualiser(): void { this.fetch(this.years.year()); }
+  actualiser(): void { this.fetch(this.years.year(), true); }
 
-  private fetch(year: number | null): void {
+  private fetch(year: number | null, refresh = false): void {
     this.loading.set(true);
     this.error.set(false);
-    this.stats.rejets(year).subscribe({
+    this.stats.rejets(year, refresh).subscribe({
       next: (d) => { this.data.set(d); this.loading.set(false); },
       error: () => { this.error.set(true); this.loading.set(false); }
     });

@@ -21,6 +21,28 @@ spring:
       # the fih_ro ROLE itself reject it ("permission denied"). The role is the
       # real guarantee; you can flip this to true later as an extra layer.
       read-only: false
+      # ----------------------------------------------------------------------
+      # Pool tuning for the festival spike on a SHARED database (§5).
+      # The DB is shared with other apps and has a global connection cap, so we
+      # stay a good citizen: a SMALL pool, held briefly. Because verification is
+      # now ONE short query per scan (see VerificationService), a few connections
+      # cycle fast enough to absorb a burst of scanners. All values are env-
+      # overridable so you can tune on the server without rebuilding.
+      pool-name: fih-pool
+      # Keep this modest. Sum of (this × app instances) must stay well under the
+      # server's max_connections, leaving room for the other apps. 10 is a sane
+      # start for one instance; raise only with metrics + DBA sign-off.
+      maximum-pool-size: ${FIH_DB_POOL_MAX:10}
+      minimum-idle: ${FIH_DB_POOL_MIN_IDLE:2}
+      # Fail FAST under a spike: a scanner gets a quick error and retries instead
+      # of dozens of requests hanging and piling up. 3 s, not the 30 s default.
+      connection-timeout: ${FIH_DB_CONN_TIMEOUT_MS:3000}
+      # Recycle connections before the server / load-balancer idle-kills them,
+      # which avoids "connection was closed" errors. Keep under the DB's limit.
+      max-lifetime: ${FIH_DB_MAX_LIFETIME_MS:600000}
+      idle-timeout: ${FIH_DB_IDLE_TIMEOUT_MS:120000}
+      # Cheap liveness probe so a dead connection is replaced, not handed out.
+      validation-timeout: ${FIH_DB_VALIDATION_TIMEOUT_MS:2000}
 
   jpa:
     hibernate:
@@ -40,14 +62,17 @@ spring:
 # App-specific configuration.
 # ---------------------------------------------------------------------------
 fih:
-  # §5 — Recette aggregates short cache. Seconds a Recette résumé / détaillée
-  # header response may be reused before being recomputed. The "Actualiser"
-  # button (?refresh=true) always bypasses it. Set to 0 to disable (always live).
-  # Trade-off: higher = fewer queries but up to <value>s stale; the queries are
-  # cheap (tiny `generation` table) so 30s is plenty. The per-model rows loaded
-  # on expand are never cached — they always reflect the latest counters.
-  recette:
-    cache-ttl-seconds: ${FIH_RECETTE_CACHE_TTL:30}
+  # §5 — short cache for the HEAVY read-only stats (Recette résumé/détaillée
+  # headers, tourniquets, rejets). Seconds a response may be reused before being
+  # recomputed. The "Actualiser" button (?refresh=true) always bypasses it. Set
+  # to 0 to disable (always live). Trade-off: higher = fewer DB scans but up to
+  # <value>s stale. On a shared DB this protects everyone from repeated heavy
+  # tturnstile scans during the gate-open spike; 30 s is plenty for an operator.
+  # Verification/verdicts are NEVER cached — only these aggregates are. The old
+  # key fih.recette.cache-ttl-seconds is still honoured as a fallback.
+  stats:
+    cache-ttl-seconds: ${FIH_STATS_CACHE_TTL:30}
+
   photos:
     folder: ${FIH_PHOTOS_FOLDER:./photos}
 

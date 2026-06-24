@@ -1,10 +1,10 @@
-import { Component, effect, signal } from '@angular/core';
+import { Component, effect, signal, OnDestroy } from '@angular/core';
 import { StatsService } from '../core/stats.service';
 import { YearStore } from '../core/year-store.service';
 import { TourniquetEvent } from '../core/models';
 import { LoadingSkeletonComponent } from '../shared/loading-skeleton.component';
 import { EmptyStateComponent } from '../shared/empty-state.component';
-import { NumPipe, FDatePipe } from '../shared/format';
+import { NumPipe, PctPipe, FDatePipe } from '../shared/format';
 
 /**
  * §5.3 — Statistique des tourniquets. One block per spectacle (event): a header
@@ -15,10 +15,23 @@ import { NumPipe, FDatePipe } from '../shared/format';
 @Component({
   selector: 'app-tourniquets',
   standalone: true,
-  imports: [LoadingSkeletonComponent, EmptyStateComponent, NumPipe, FDatePipe],
+  imports: [LoadingSkeletonComponent, EmptyStateComponent, NumPipe, PctPipe, FDatePipe],
   template: `
-    <h2 class="text-xl font-bold text-ink mb-1">Statistique des tourniquets</h2>
-    <p class="text-sm text-muted mb-5">Codes accessibles et transactions par spectacle et modèle · {{ years.label() }}</p>
+    <div class="flex flex-wrap items-start justify-between gap-4 mb-5">
+      <div>
+        <h2 class="text-xl font-bold text-ink mb-1">Statistique des tourniquets</h2>
+        <p class="text-sm text-muted">Codes accessibles et transactions par spectacle et modèle · {{ years.label() }}</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <button class="btn-ghost" [class.on]="auto()" (click)="auto.set(!auto())"
+                [title]="auto() ? 'Actualisation auto (30 s) activée' : 'Actualisation auto désactivée'">
+          <span class="msr text-[18px]">{{ auto() ? 'sync' : 'sync_disabled' }}</span> Auto
+        </button>
+        <button class="btn-ghost" (click)="actualiser()" [disabled]="loading()" title="Recharger maintenant">
+          <span class="msr text-[18px]" [class.spin]="loading()">refresh</span> Actualiser
+        </button>
+      </div>
+    </div>
 
     @if (loading()) {
       <app-loading-skeleton [height]="160" />
@@ -36,10 +49,15 @@ import { NumPipe, FDatePipe } from '../shared/format';
             <div class="font-semibold text-ink mr-auto">
               {{ e.eventTitle }}<span class="text-xs text-muted ml-2">{{ e.eventDate | fdate:true }}</span>
             </div>
-            <div class="text-sm"><span class="text-muted">Audience</span> <span class="font-semibold text-ink ml-1">{{ e.audience | num }}</span></div>
+            <div class="text-sm" title="Billets émis / disponibles"><span class="text-muted">Émis</span> <span class="font-semibold text-ink ml-1">{{ e.audience | num }}</span></div>
             <div class="text-sm"><span class="text-muted">Transactions Billets</span> <span class="font-semibold text-ink ml-1">{{ e.transactionsBillets | num }}</span></div>
             <div class="text-sm"><span class="text-muted">Transactions Vouchers</span> <span class="font-semibold text-ink ml-1">{{ e.transactionsVouchers | num }}</span></div>
-            <div class="text-sm"><span class="text-muted">Tourniquets</span> <span class="font-bold ml-1" style="color:var(--primary)">{{ e.tourniquets | num }}</span></div>
+            <div class="text-sm" title="Entrées réelles aux tourniquets"><span class="text-muted">Entrées</span> <span class="font-bold ml-1" style="color:var(--primary)">{{ e.tourniquets | num }}</span></div>
+            <div class="flex items-center gap-2 min-w-[150px]" title="Taux de présence = entrées réelles ÷ billets émis">
+              <span class="text-sm text-muted">Présence</span>
+              <span class="taux-bar"><span [style.width.%]="presence(e)"></span></span>
+              <span class="text-xs font-semibold" style="color:var(--primary)">{{ presence(e) | pct }}</span>
+            </div>
           </div>
 
           <div class="table-scroll">
@@ -75,24 +93,63 @@ import { NumPipe, FDatePipe } from '../shared/format';
         </div>
       }
     }
-  `
+  `,
+  styles: [`
+    .btn-ghost {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 7px 13px; border-radius: 9px; font-size: .875rem; font-weight: 500;
+      color: var(--muted); background: var(--surface);
+      border: 1px solid var(--line); cursor: pointer;
+      transition: color .15s ease, border-color .15s ease;
+    }
+    .btn-ghost:hover:not(:disabled) { color: var(--primary); border-color: var(--primary); }
+    .btn-ghost:disabled { opacity: .55; cursor: default; }
+    .btn-ghost.on { color: var(--primary); border-color: var(--primary); }
+    .taux-bar { flex: 1; height: 6px; border-radius: 99px; background: var(--line); overflow: hidden; display: block; }
+    .taux-bar > span { display: block; height: 100%; background: var(--primary); }
+    .spin { animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  `]
 })
-export class TourniquetsComponent {
+export class TourniquetsComponent implements OnDestroy {
   loading = signal(true);
   error = signal(false);
   events = signal<TourniquetEvent[]>([]);
+  auto = signal(true);                  // auto-refresh every 30 s (for live events)
+  private timer?: ReturnType<typeof setInterval>;
 
   constructor(private stats: StatsService, public years: YearStore) {
     effect(() => {
       if (!this.years.ready()) return;
       this.fetch(this.years.year());
     });
+    // Auto-refresh: re-fetch every 30 s while enabled, so an ongoing event's
+    // présence climbs on its own. Uses the CACHED endpoint (refresh=false) so
+    // many watchers still cost ~one query per cache window on the shared DB.
+    // Skips when a request is in flight or the tab is hidden (good citizen).
+    this.timer = setInterval(() => {
+      if (this.auto() && !this.loading()
+          && (typeof document === 'undefined' || !document.hidden)) {
+        this.fetch(this.years.year(), false);
+      }
+    }, 30_000);
   }
 
-  private fetch(year: number | null): void {
+  ngOnDestroy(): void {
+    if (this.timer) clearInterval(this.timer);
+  }
+
+  /** Taux de présence = entrées réelles (tourniquets) ÷ billets émis (audience). */
+  presence(e: TourniquetEvent): number {
+    return e.audience > 0 ? (e.tourniquets * 100) / e.audience : 0;
+  }
+
+  actualiser(): void { this.fetch(this.years.year(), true); }
+
+  private fetch(year: number | null, refresh = false): void {
     this.loading.set(true);
     this.error.set(false);
-    this.stats.tourniquets(year).subscribe({
+    this.stats.tourniquets(year, refresh).subscribe({
       next: (e) => { this.events.set(e); this.loading.set(false); },
       error: () => { this.error.set(true); this.loading.set(false); }
     });

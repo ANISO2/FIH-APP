@@ -72,12 +72,12 @@ export class StatsService {
   }
 
   // ---- Statistique des tourniquets (§5.3) ----
-  tourniquets(year?: number | null): Observable<TourniquetEvent[]> {
-    return this.http.get<TourniquetEvent[]>('/api/stats/tourniquets', this.withYear(year));
+  tourniquets(year?: number | null, refresh = false): Observable<TourniquetEvent[]> {
+    return this.http.get<TourniquetEvent[]>('/api/stats/tourniquets', this.withYear(year, refresh));
   }
 
   // ---- Analyse des rejets (Part C) ----
-  rejets(year?: number | null): Observable<RejetsData> {
-    return this.http.get<RejetsData>('/api/stats/rejets', this.withYear(year));
+  rejets(year?: number | null, refresh = false): Observable<RejetsData> {
+    return this.http.get<RejetsData>('/api/stats/rejets', this.withYear(year, refresh));
   }
 }

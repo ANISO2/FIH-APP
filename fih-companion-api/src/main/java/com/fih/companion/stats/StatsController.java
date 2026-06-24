@@ -102,13 +102,17 @@ public class StatsController {
 
     // --------------------------------------------- Statistique des tourniquets (§5.3)
     @GetMapping("/tourniquets")
-    public List<TourniquetEventDto> tourniquets(@RequestParam(required = false) Integer year) {
-        return service.tourniquets(year);
+    public List<TourniquetEventDto> tourniquets(
+            @RequestParam(required = false) Integer year,
+            @RequestParam(required = false, defaultValue = "false") boolean refresh) {
+        return service.tourniquets(year, refresh);
     }
 
     // --------------------------------------------- Analyse des rejets (Part C)
     @GetMapping("/rejets")
-    public RejetsDto rejets(@RequestParam(required = false) Integer year) {
-        return service.rejets(year);
+    public RejetsDto rejets(
+            @RequestParam(required = false) Integer year,
+            @RequestParam(required = false, defaultValue = "false") boolean refresh) {
+        return service.rejets(year, refresh);
     }
 }
