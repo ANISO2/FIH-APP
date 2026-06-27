@@ -84,12 +84,14 @@ export class GatesComponent {
     });
   }
 
+  private reqId = 0;
   private fetch(year: number | null): void {
+    const seq = ++this.reqId;       // 3.4 : ignore les réponses obsolètes
     this.loading.set(true);
     this.error.set(false);
     this.stats.gate(year).subscribe({
-      next: (g) => { this.g.set(g); this.buildStack(g); this.loading.set(false); },
-      error: () => { this.error.set(true); this.loading.set(false); }
+      next: (g) => { if (seq !== this.reqId) return; this.g.set(g); this.buildStack(g); this.loading.set(false); },
+      error: () => { if (seq !== this.reqId) return; this.error.set(true); this.loading.set(false); }
     });
   }
 

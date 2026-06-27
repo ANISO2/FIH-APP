@@ -142,18 +142,21 @@ export class RecetteGuichetComponent {
     });
   }
 
+  private reqId = 0;
   private fetch(year: number | null): void {
+    const seq = ++this.reqId;       // 3.4 : ignore les réponses obsolètes
     this.loading.set(true);
     this.error.set(false);
     this.stats.recetteGuichetSummary(year).subscribe({
       next: (s) => {
+        if (seq !== this.reqId) return;
         this.summary.set(s);
         this.stats.recetteGuichetDetail(year).subscribe({
-          next: (d) => { this.detail.set(d); this.loading.set(false); },
-          error: () => { this.error.set(true); this.loading.set(false); }
+          next: (d) => { if (seq !== this.reqId) return; this.detail.set(d); this.loading.set(false); },
+          error: () => { if (seq !== this.reqId) return; this.error.set(true); this.loading.set(false); }
         });
       },
-      error: () => { this.error.set(true); this.loading.set(false); }
+      error: () => { if (seq !== this.reqId) return; this.error.set(true); this.loading.set(false); }
     });
   }
 

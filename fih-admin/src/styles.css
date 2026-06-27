@@ -126,3 +126,61 @@ body {
   color: var(--primary);
   box-shadow: 0 1px 3px rgba(16, 30, 54, .10);
 }
+
+/* ============================================================
+   3.5 — Finitions visuelles (purement additif).
+   Le systeme de design existant (cartes 16px, ombres douces,
+   conteneur centre max 1400px, etats chargement/vide/erreur,
+   grilles responsives) est CONSERVE. Ce bloc ne fait qu'ajouter
+   des finitions transverses ; aucune logique de donnees n'est
+   modifiee.
+   ============================================================ */
+
+/* Defilement doux + ancrage sous l'en-tete collant. */
+html { scroll-behavior: smooth; }
+:where(h1, h2, h3) { scroll-margin-top: 80px; }
+
+/* Selection de texte aux couleurs de la marque. */
+::selection { background: rgba(15, 157, 157, .18); color: var(--ink); }
+
+/* Scrollbars discretes et coherentes (WebKit + Firefox). */
+* { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: var(--line); border-radius: 99px; border: 2px solid var(--surface);
+}
+*::-webkit-scrollbar-thumb:hover { background: #cdd4de; }
+
+/* En-tetes de tableaux lisibles : pas de retour a la ligne
+   disgracieux ; le defilement horizontal (.table-scroll) prend
+   le relais sur petits ecrans. */
+.table-scroll thead th { white-space: nowrap; }
+
+/* Indices d'ombre lateraux : signalent qu'un tableau large peut
+   defiler horizontalement (technique de fond "scroll shadow"). */
+.table-scroll {
+  background:
+    linear-gradient(to right, var(--surface) 30%, rgba(255,255,255,0)) left center / 28px 100% no-repeat,
+    linear-gradient(to left,  var(--surface) 30%, rgba(255,255,255,0)) right center / 28px 100% no-repeat,
+    linear-gradient(to right, rgba(16,30,54,.10), rgba(255,255,255,0)) left center / 9px 100% no-repeat,
+    linear-gradient(to left,  rgba(16,30,54,.10), rgba(255,255,255,0)) right center / 9px 100% no-repeat;
+  background-attachment: local, local, scroll, scroll;
+}
+
+/* Confort de lecture sur tres grands ecrans : les paragraphes
+   d'aide ne s'etirent pas a l'infini. */
+p.text-muted { max-width: 78ch; }
+
+/* Images/SVG jamais hors cadre. */
+img, svg { max-width: 100%; }
+
+/* Respecte la preference "moins d'animations". */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -85,7 +85,9 @@ export class OverviewComponent {
     return o ? o.totalBillets + o.totalVouchers : 0;
   }
 
+  private reqId = 0;
   private fetch(year: number | null): void {
+    const seq = ++this.reqId;          // 3.4 : ignore les réponses obsolètes
     this.loading.set(true);
     this.error.set(false);
     forkJoin({
@@ -96,6 +98,7 @@ export class OverviewComponent {
       events: this.stats.events(year)
     }).subscribe({
       next: (d) => {
+        if (seq !== this.reqId) return;
         this.ov.set(d.overview);
         this.buildAttendance(d.byDay);
         this.buildGate(d.gate);
@@ -103,7 +106,7 @@ export class OverviewComponent {
         this.buildTopEvents(d.events);
         this.loading.set(false);
       },
-      error: () => { this.error.set(true); this.loading.set(false); }
+      error: () => { if (seq !== this.reqId) return; this.error.set(true); this.loading.set(false); }
     });
   }
 

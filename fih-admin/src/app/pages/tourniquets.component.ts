@@ -115,7 +115,7 @@ export class TourniquetsComponent implements OnDestroy {
   loading = signal(true);
   error = signal(false);
   events = signal<TourniquetEvent[]>([]);
-  auto = signal(true);                  // auto-refresh every 30 s (for live events)
+  auto = signal(false);                 // 3.3 : OFF par défaut (l'utilisateur active l'auto-actualisation)
   private timer?: ReturnType<typeof setInterval>;
 
   constructor(private stats: StatsService, public years: YearStore) {
@@ -123,20 +123,32 @@ export class TourniquetsComponent implements OnDestroy {
       if (!this.years.ready()) return;
       this.fetch(this.years.year());
     });
-    // Auto-refresh: re-fetch every 30 s while enabled, so an ongoing event's
-    // présence climbs on its own. Uses the CACHED endpoint (refresh=false) so
-    // many watchers still cost ~one query per cache window on the shared DB.
-    // Skips when a request is in flight or the tab is hidden (good citizen).
+    // 3.3 — Auto-actualisation OFF par défaut. Le minuteur n'existe QUE pendant
+    // que « Auto » est actif : cet effect le démarre quand auto() passe à true
+    // et l'arrête COMPLÈTEMENT quand auto() repasse à false. Endpoint mis en
+    // cache (refresh=false) ; saute si une requête est en cours ou si l'onglet
+    // est masqué.
+    effect(() => {
+      if (this.auto()) this.startTimer();
+      else this.stopTimer();
+    });
+  }
+
+  private startTimer(): void {
+    if (this.timer) return;
     this.timer = setInterval(() => {
-      if (this.auto() && !this.loading()
-          && (typeof document === 'undefined' || !document.hidden)) {
+      if (!this.loading() && (typeof document === 'undefined' || !document.hidden)) {
         this.fetch(this.years.year(), false);
       }
     }, 30_000);
   }
 
+  private stopTimer(): void {
+    if (this.timer) { clearInterval(this.timer); this.timer = undefined; }
+  }
+
   ngOnDestroy(): void {
-    if (this.timer) clearInterval(this.timer);
+    this.stopTimer();
   }
 
   /** Taux de présence = entrées réelles (tourniquets) ÷ billets émis (audience). */
@@ -146,12 +158,14 @@ export class TourniquetsComponent implements OnDestroy {
 
   actualiser(): void { this.fetch(this.years.year(), true); }
 
+  private reqId = 0;
   private fetch(year: number | null, refresh = false): void {
+    const seq = ++this.reqId;       // 3.4 : ignore les réponses obsolètes
     this.loading.set(true);
     this.error.set(false);
     this.stats.tourniquets(year, refresh).subscribe({
-      next: (e) => { this.events.set(e); this.loading.set(false); },
-      error: () => { this.error.set(true); this.loading.set(false); }
+      next: (e) => { if (seq !== this.reqId) return; this.events.set(e); this.loading.set(false); },
+      error: () => { if (seq !== this.reqId) return; this.error.set(true); this.loading.set(false); }
     });
   }
 }

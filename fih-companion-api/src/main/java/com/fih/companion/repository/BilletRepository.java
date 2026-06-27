@@ -2,6 +2,8 @@ package com.fih.companion.repository;
 
 import com.fih.companion.domain.Billet;
 import com.fih.companion.invitation.projection.LotRowProjection;
+import com.fih.companion.verification.projection.AccessLogProjection;
+import com.fih.companion.verification.projection.BilletDetailsProjection;
 import com.fih.companion.verification.projection.BilletVerifyProjection;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -55,15 +57,62 @@ public interface BilletRepository extends JpaRepository<Billet, String> {
     Optional<BilletVerifyProjection> findForVerification(@Param("code") String code);
 
     /**
+     * DETAILS (lazy) — management extras shown only when the operator opens the
+     * ℹ screen. Single row by PK (numeroserie); LEFT JOINs to livraison/vente on
+     * their indexed FKs. Not on the hot scan path.
+     */
+    @Query(value = """
+            SELECT b.numeroserie    AS "numeroserie",
+                   b.codebarre      AS "codebarre",
+                   b.etatlivraison  AS "livre",
+                   l.datelivraison  AS "dateLivraison",
+                   v.datevente      AS "dateVente"
+            FROM billet b
+            LEFT JOIN livraison l ON l.id = b.livraison
+            LEFT JOIN vente v     ON v.id = b.vente
+            WHERE b.numeroserie = :numeroserie
+            LIMIT 1
+            """, nativeQuery = true)
+    Optional<BilletDetailsProjection> findBilletDetails(@Param("numeroserie") String numeroserie);
+
+    /**
+     * DETAILS (lazy) — Public access log for a billet, newest first, capped.
+     * Filtered by tturnstile.billet (= numeroserie), which IS indexed
+     * (ix_tturnstile_fk_tturnstile_billet) — so this stays fast no matter how
+     * large the log grows. We never filter the log by the un-indexed codebarre.
+     */
+    @Query(value = """
+            SELECT t.reference        AS "reference",
+                   t.codebarre        AS "codebarre",
+                   t.datetransaction  AS "datetransaction",
+                   t.heuretransaction AS "heuretransaction",
+                   t.porte            AS "porte",
+                   t.transactionstate AS "transactionstate"
+            FROM tturnstile t
+            WHERE t.billet = :numeroserie
+            ORDER BY t.heuretransaction DESC NULLS LAST
+            LIMIT 200
+            """, nativeQuery = true)
+    List<AccessLogProjection> findPublicAccessLog(@Param("numeroserie") String numeroserie);
+
+    /** DETAILS (lazy) — VIP access log for a billet (vipaccess.billet, indexed). */
+    @Query(value = """
+            SELECT t.reference        AS "reference",
+                   t.codebarre        AS "codebarre",
+                   t.datetransaction  AS "datetransaction",
+                   t.heuretransaction AS "heuretransaction",
+                   t.porte            AS "porte",
+                   t.transactionstate AS "transactionstate"
+            FROM vipaccess t
+            WHERE t.billet = :numeroserie
+            ORDER BY t.heuretransaction DESC NULLS LAST
+            LIMIT 200
+            """, nativeQuery = true)
+    List<AccessLogProjection> findVipAccessLog(@Param("numeroserie") String numeroserie);
+
+    /**
      * Change C — every billet whose numeroserie falls in [start, end], with its
      * model/event and any existing assigned name. Read-only.
-     *
-     * The range is a plain SQL BETWEEN on numeroserie. In this database the
-     * numeroserie is a fixed-width 10-digit numeric string, so a text BETWEEN is
-     * the same as a numeric one. We join modelebillet/evenement for labels and
-     * LEFT JOIN our own badge_affectation so a row with no name simply returns
-     * NULL. Invitation-vs-not filtering happens in Java (config-driven), so this
-     * query stays generic.
      */
     @Query(value = """
             SELECT b.numeroserie  AS "numeroserie",

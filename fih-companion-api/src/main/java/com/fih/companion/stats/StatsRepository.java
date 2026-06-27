@@ -37,11 +37,16 @@ import java.util.List;
  */
 public interface StatsRepository extends Repository<Tturnstile, Integer> {
 
-    /** Distinct festival years present in evenement.ddate, most-recent first. */
+    /**
+     * Distinct festival years present in evenement.ddate, most-recent first.
+     * 3.4: the 1970 "FIH" sentinel event is hidden via a simple year cutoff
+     * (kept > 2000) so only real editions appear in the selector.
+     */
     @Query(value = """
             SELECT DISTINCT extract(year FROM ddate)::int AS yr
             FROM evenement
             WHERE ddate IS NOT NULL
+              AND extract(year FROM ddate) > 2000
             ORDER BY yr DESC
             """, nativeQuery = true)
     List<Integer> availableYears();
@@ -194,9 +199,9 @@ public interface StatsRepository extends Repository<Tturnstile, Integer> {
     /**
      * Recette résumé: revenue (TND) per event, split Billet / Voucher.
      *
-     * Kit removed (Change B): the `generation` table has no real "kit stock"
-     * source — counterkit is 0 everywhere — so the column only added clutter.
-     * Numbers are otherwise byte-identical to before (kit term was always 0).
+     * Money only (3.1): only money-bearing models (prix > 0) are counted. Free
+     * items (invitations, prix = 0) belong to Badges/Invitations, not revenue,
+     * so they are excluded here. Kit removed earlier (counterkit is 0 everywhere).
      *
      * SCALE: this is a single SQL GROUP BY over `generation` (one row per
      * event x model — ~129 rows in prod, and it does NOT grow when tickets are
@@ -211,77 +216,61 @@ public interface StatsRepository extends Repository<Tturnstile, Integer> {
                    COALESCE(SUM((g.counterbillet + g.countervoucher) * g.prix), 0) AS "total"
             FROM evenement e
             JOIN generation g ON g.evenement = e.reference
-            WHERE (:year IS NULL OR extract(year FROM e.ddate) = :year)
+            WHERE g.prix > 0
+              AND (:year IS NULL OR extract(year FROM e.ddate) = :year)
             GROUP BY e.reference, e.titre, e.ddate
             ORDER BY "total" DESC, e.ddate
             """, nativeQuery = true)
     List<RecetteSummaryProjection> recetteSummary(@Param("year") Integer year);
 
     /**
-     * Recette détaillée — HEADERS (Change C): one aggregated row per event with
-     * the totals shown on each collapsible panel. Génération = SUM(stock*),
-     * Vendu = SUM(counter*) PLUS invitations already AFFECTÉES, Reste = générés
-     * - vendus, Recette = SUM(counter*prix) (money unchanged — invitations are
-     * free). The per-model rows are loaded separately, on expand.
+     * Recette détaillée — HEADERS (3.1, money only): one aggregated row per event,
+     * restricted to money-bearing models (prix > 0). Génération = SUM(stock*),
+     * Vendu = SUM(counter*), Reste = générés - vendus, Recette = SUM(counter*prix),
+     * all over paid models only. Free invitations (prix = 0) and their
+     * badge_affectation assignments are excluded entirely — they are head-count,
+     * tracked in the Badges/Invitations module, never in revenue. The per-model
+     * rows are loaded separately, on expand.
      *
-     * AFFECTÉES → VENTE: an invitation that has been assigned to someone (a row
-     * in our own badge_affectation table) is treated as distributed, so it
-     * counts in "Vendu" instead of "Reste". Attribution: badge_affectation holds
-     * the billet serial; we join it to billet to find that billet's event x
-     * model. Only invitations are ever affected, so this never touches paid
-     * models. The join hits billet by its primary key (numeroserie), so it stays
-     * cheap as the affectation table grows. Money (recette) deliberately does NOT
-     * include affectées — they are free, this is a head-count, not revenue.
-     *
-     * Single SQL GROUP BY over `generation`, left-joined to the small affected
-     * count — same cheap shape as the résumé.
+     * Single SQL GROUP BY over `generation` — same cheap shape as the résumé;
+     * it never touches the large billet/voucher/tturnstile tables.
      */
     @Query(value = """
             SELECT e.reference AS "eventId", e.titre AS "eventTitle", e.ddate AS "eventDate",
                    COALESCE(SUM(g.stockbillet + g.stockvoucher), 0)                          AS "totalGenere",
-                   COALESCE(SUM(g.counterbillet + g.countervoucher + COALESCE(aff.affected, 0)), 0) AS "totalVendu",
-                   COALESCE(SUM((g.stockbillet  - g.counterbillet - COALESCE(aff.affected, 0))
+                   COALESCE(SUM(g.counterbillet + g.countervoucher), 0)                        AS "totalVendu",
+                   COALESCE(SUM((g.stockbillet  - g.counterbillet)
                               + (g.stockvoucher - g.countervoucher)), 0)                     AS "totalReste",
                    COALESCE(SUM((g.counterbillet + g.countervoucher) * g.prix), 0)           AS "recetteTotale"
             FROM evenement e
             JOIN generation g ON g.evenement = e.reference
-            LEFT JOIN (SELECT b.evenement, b.modelebillet, count(*) AS affected
-                       FROM badge_affectation a
-                       JOIN billet b ON b.numeroserie = a.numeroserie
-                       GROUP BY b.evenement, b.modelebillet) aff
-                   ON aff.evenement = g.evenement AND aff.modelebillet = g.modelebillet
-            WHERE (:year IS NULL OR extract(year FROM e.ddate) = :year)
+            WHERE g.prix > 0
+              AND (:year IS NULL OR extract(year FROM e.ddate) = :year)
             GROUP BY e.reference, e.titre, e.ddate
             ORDER BY "recetteTotale" DESC, e.ddate
             """, nativeQuery = true)
     List<RecetteEventHeaderProjection> recetteDetailHeaders(@Param("year") Integer year);
 
     /**
-     * Recette détaillée — ROWS (Change C): the per-model lines for ONE event,
-     * fetched lazily when its panel is expanded. Invitations already AFFECTÉES
-     * are added to billet "Vente" and removed from "Reste" (see headers above);
-     * money (recetteTnd) stays on the paid counters only. Filtered by event id,
-     * which already pins a single edition, so no year guard is needed.
+     * Recette détaillée — ROWS (3.1, money only): the per-model lines for ONE
+     * event, fetched lazily when its panel is expanded. Restricted to paid models
+     * (prix > 0); free invitation lines are not rendered in Recette at all.
+     * Filtered by event id, which already pins a single edition, so no year guard.
      */
     @Query(value = """
             SELECT m.reference AS "modelId", m.modele AS "modelName",
                    g.prix AS "montant",
                    g.stockbillet                                              AS "billetGeneration",
-                   (g.counterbillet + COALESCE(aff.affected, 0))              AS "billetVente",
-                   (g.stockbillet - g.counterbillet - COALESCE(aff.affected, 0)) AS "billetReste",
+                   g.counterbillet                                            AS "billetVente",
+                   (g.stockbillet - g.counterbillet)                          AS "billetReste",
                    g.stockvoucher                                             AS "voucherGeneration",
                    g.countervoucher                                           AS "voucherVente",
                    (g.stockvoucher - g.countervoucher)                        AS "voucherReste",
-                   (g.counterbillet + g.countervoucher + COALESCE(aff.affected, 0)) AS "totalVendu",
+                   (g.counterbillet + g.countervoucher)                       AS "totalVendu",
                    (g.counterbillet + g.countervoucher) * g.prix              AS "recetteTnd"
             FROM generation g
             JOIN modelebillet m ON m.reference = g.modelebillet
-            LEFT JOIN (SELECT b.evenement, b.modelebillet, count(*) AS affected
-                       FROM badge_affectation a
-                       JOIN billet b ON b.numeroserie = a.numeroserie
-                       GROUP BY b.evenement, b.modelebillet) aff
-                   ON aff.evenement = g.evenement AND aff.modelebillet = g.modelebillet
-            WHERE g.evenement = :eventId
+            WHERE g.evenement = :eventId AND g.prix > 0
             ORDER BY m.modele
             """, nativeQuery = true)
     List<RecetteModelRowProjection> recetteDetailRows(@Param("eventId") int eventId);

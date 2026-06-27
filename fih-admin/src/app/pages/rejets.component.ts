@@ -311,12 +311,14 @@ export class RejetsComponent {
 
   actualiser(): void { this.fetch(this.years.year(), true); }
 
+  private reqId = 0;
   private fetch(year: number | null, refresh = false): void {
+    const seq = ++this.reqId;       // 3.4 : ignore les réponses obsolètes
     this.loading.set(true);
     this.error.set(false);
     this.stats.rejets(year, refresh).subscribe({
-      next: (d) => { this.data.set(d); this.loading.set(false); },
-      error: () => { this.error.set(true); this.loading.set(false); }
+      next: (d) => { if (seq !== this.reqId) return; this.data.set(d); this.loading.set(false); },
+      error: () => { if (seq !== this.reqId) return; this.error.set(true); this.loading.set(false); }
     });
   }
 

@@ -118,3 +118,38 @@ export interface RejetsData {
   parCategorie: RejetGroupe[]; parEvenement: RejetEvenement[]; parPorte: RejetGroupe[];
   parModele: RejetModele[]; parJour: RejetJour[]; scans: RejetScan[]; scansTronques: boolean;
 }
+
+// ---- Vérification (3.2) ----
+/** Server-side paginated result wrapper (mirrors backend PageDto). */
+export interface PageResult<T> {
+  content: T[]; page: number; size: number; totalElements: number; totalPages: number;
+}
+export type SearchField = 'codebarre' | 'numeroserie';
+export type SearchMode = 'exact' | 'prefix';
+
+/** One row of the Vérification Billet list. */
+export interface BilletSearchRow {
+  numeroserie: string; codebarre: string;
+  activation: boolean; livre: boolean; vendu: boolean; utilise: boolean;
+  eventTitle: string; modelName: string;
+  dateVente: string | null; livreur: string | null; dateLivraison: string | null;
+}
+/** One row of the Vérification Voucher list. */
+export interface VoucherSearchRow {
+  eventTitle: string; modelName: string; numeroserie: string; codebarre: string;
+  utilisation: boolean; vendu: boolean; activation: boolean; reservation: boolean;
+  commande: string | null;
+}
+/** One access-log line (Public via tturnstile, VIP via vipaccess). */
+export interface AccessLog {
+  reference: number; codebarre: string;
+  date: string | null; time: string | null;
+  porte: string; granted: boolean;
+}
+/** Details modal payload (flags + identity + Public/VIP access logs). */
+export interface TicketDetails {
+  type: 'BILLET' | 'VOUCHER'; numeroserie: string; codebarre: string;
+  eventTitle: string; ticketModel: string;
+  vente: boolean; utilisation: boolean; reservation: boolean; activation: boolean;
+  publicLog: AccessLog[]; vipLog: AccessLog[];
+}

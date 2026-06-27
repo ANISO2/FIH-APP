@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 import '../core/config/app_constants.dart';
 import '../features/verification/presentation/pages/home_page.dart';
 import 'theme.dart';
 
-/// Root of the FIH Verifier app. Base scaffold only — the real navigation and
-/// verification screens are added in the implementation phase.
+/// Root of the FIH Verifier app. French locale, brand theme, bottom-nav shell.
 class FihVerifierApp extends StatelessWidget {
   const FihVerifierApp({super.key});
 
@@ -15,6 +15,13 @@ class FihVerifierApp extends StatelessWidget {
       title: AppConstants.appName,
       debugShowCheckedModeBanner: false,
       theme: buildAppTheme(),
+      locale: const Locale('fr'),
+      supportedLocales: const [Locale('fr'), Locale('en')],
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
       home: const HomePage(),
     );
   }

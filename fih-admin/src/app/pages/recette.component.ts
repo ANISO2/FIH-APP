@@ -410,7 +410,9 @@ export class RecetteComponent {
   }
 
   // ---- Chargement ----
+  private reqId = 0;
   private fetch(year: number | null, refresh = false): void {
+    const seq = ++this.reqId;       // 3.4 : ignore les réponses obsolètes
     this.loading.set(true);
     this.error.set(false);
     if (!refresh) {                 // year change: start clean
@@ -419,18 +421,20 @@ export class RecetteComponent {
     }
     this.stats.recetteSummary(year, refresh).subscribe({
       next: (s) => {
+        if (seq !== this.reqId) return;
         this.summary.set(s);
         this.stats.recetteDetailHeaders(year, refresh).subscribe({
           next: (h) => {
+            if (seq !== this.reqId) return;
             this.headers.set(h);
             // Recharge les lignes des panneaux restés ouverts (cache vidé au refresh).
             for (const id of this.expanded()) this.loadRows(id);
             this.loading.set(false);
           },
-          error: () => { this.error.set(true); this.loading.set(false); }
+          error: () => { if (seq !== this.reqId) return; this.error.set(true); this.loading.set(false); }
         });
       },
-      error: () => { this.error.set(true); this.loading.set(false); }
+      error: () => { if (seq !== this.reqId) return; this.error.set(true); this.loading.set(false); }
     });
   }
 

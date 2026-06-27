@@ -14,6 +14,8 @@ export const routes: Routes = [
       { path: 'recette', loadComponent: () => import('./pages/recette.component').then(m => m.RecetteComponent) },
       { path: 'recette-guichet', loadComponent: () => import('./pages/recette-guichet.component').then(m => m.RecetteGuichetComponent) },
       { path: 'tourniquets', loadComponent: () => import('./pages/tourniquets.component').then(m => m.TourniquetsComponent) },
+      { path: 'verification/billet', loadComponent: () => import('./pages/verification-billet.component').then(m => m.VerificationBilletComponent) },
+      { path: 'verification/voucher', loadComponent: () => import('./pages/verification-voucher.component').then(m => m.VerificationVoucherComponent) },
       { path: 'rejets', loadComponent: () => import('./pages/rejets.component').then(m => m.RejetsComponent) },
       { path: 'gates', loadComponent: () => import('./pages/gates.component').then(m => m.GatesComponent) },
       { path: 'badges', loadComponent: () => import('./pages/badges.component').then(m => m.BadgesComponent) },
