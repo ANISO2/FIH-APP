@@ -4,12 +4,7 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import org.hibernate.annotations.Immutable;
 
-/**
- * Ticket. Read-only mapping of "billet" (PK = numeroserie).
- * The pair (evenement, modelebillet) references the generation composite key.
- * We keep them as plain Integers here (simpler, still read-only); the service
- * layer fetches the related ModeleBillet/Evenement by id when needed.
- */
+
 @Entity
 @Table(name = "billet")
 @Immutable

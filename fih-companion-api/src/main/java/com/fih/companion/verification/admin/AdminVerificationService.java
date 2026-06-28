@@ -20,22 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
-/**
- * Backoffice "Vérification" (3.2): two read-only lookups (Billet / Voucher),
- * each "search by indexed code → list" plus a "details" modal.
- *
- * Reuse: identity + the four flags for the modal come from the existing
- * {@link VerificationService} (one indexed round trip, verdict NEVER cached);
- * the Public/VIP access logs come from the existing repository methods that
- * read by the INDEXED numeroserie. Only the paginated SEARCH is new (its own
- * read-only repositories), so no existing file is modified.
- *
- * SEARCH knobs:
- *  - field = codebarre | numeroserie (which indexed column to hit)
- *  - mode  = exact | prefix (exact = index seek; prefix = LIKE 'x%', index
- *            eligible under C.UTF-8). "contains" is intentionally NOT offered.
- *  - page/size are clamped server-side; rows are never all loaded.
- */
+
 @Service
 @Transactional(readOnly = true)
 public class AdminVerificationService {
@@ -124,8 +109,7 @@ public class AdminVerificationService {
         return "prefix".equalsIgnoreCase(mode);
     }
 
-    /** Escapes LIKE wildcards in user input, then appends % for a prefix match. */
-    private String like(String value) {
+     private String like(String value) {
         String escaped = value
                 .replace("\\", "\\\\")
                 .replace("%", "\\%")

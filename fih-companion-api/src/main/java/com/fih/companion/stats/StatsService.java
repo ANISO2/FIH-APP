@@ -14,37 +14,13 @@ import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
-/**
- * Assembles the stats DTOs from the read-only aggregate queries.
- *
- * Year awareness: every dashboard method now takes a nullable {@code year}.
- * {@code null} means "Toutes les années" and reproduces the original numbers;
- * a concrete year filters by evenement.ddate's year. The per-event detail
- * (eventDetail) is intentionally NOT year-filtered: it is reached by a unique
- * event id, which already pins it to a single edition.
- */
+
 @Service
 @Transactional(readOnly = true)
 public class StatsService {
 
     private final StatsRepository repo;
 
-    /**
-     * Optional short-TTL cache for the HEAVY stats aggregates (Change §5):
-     * Recette résumé/détaillée headers, the tourniquet breakdown, and the rejets
-     * analysis. 0 disables it. Configured via fih.stats.cache-ttl-seconds (falls
-     * back to the older fih.recette.cache-ttl-seconds, else 30).
-     *
-     * Why this matters on a SHARED database during a spike: tourniquets and
-     * rejets scan the large, fast-growing `tturnstile` table. When the gates open
-     * and several admins open the dashboards, those scans pile onto the same
-     * database the turnstiles are hammering. A 30 s TTL means repeated dashboard
-     * views inside that window cost ONE scan instead of one per view — a big drop
-     * in load — while the numbers stay "30 s fresh", which is plenty for an
-     * operator. The "Actualiser" button (refresh=true) always bypasses it for an
-     * on-demand live read. Verdicts/verification are NEVER cached (see
-     * VerificationService) — only these read-only aggregates are.
-     */
     private final long statsCacheTtlSeconds;
     private final ConcurrentHashMap<String, CacheEntry> statsCache = new ConcurrentHashMap<>();
 
@@ -56,12 +32,7 @@ public class StatsService {
         this.statsCacheTtlSeconds = statsCacheTtlSeconds;
     }
 
-    /**
-     * Returns a cached value if present and fresh, otherwise runs {@code loader},
-     * stores it and returns it. {@code refresh=true} (the "Actualiser" button)
-     * forces a reload and refreshes the entry. TTL <= 0 bypasses the cache
-     * entirely. Stored values are immutable DTOs, so sharing them is safe.
-     */
+
     @SuppressWarnings("unchecked")
     private <T> T cached(String key, boolean refresh, Supplier<T> loader) {
         if (statsCacheTtlSeconds <= 0) {
@@ -79,8 +50,7 @@ public class StatsService {
         return value;
     }
 
-    /** Distinct festival years present in the database, most-recent first. */
-    public List<Integer> availableYears() {
+     public List<Integer> availableYears() {
         return repo.availableYears();
     }
 
@@ -141,8 +111,7 @@ public class StatsService {
     }
 
     // ----------------------------------------------------------- Recette
-    /** Recette résumé (Change B): revenue per event, Billet / Voucher / Total. */
-    public List<RecetteSummaryDto> recetteSummary(Integer year, boolean refresh) {
+     public List<RecetteSummaryDto> recetteSummary(Integer year, boolean refresh) {
         return cached("summary:" + year, refresh, () ->
                 repo.recetteSummary(year).stream()
                         .map(p -> new RecetteSummaryDto(
@@ -151,11 +120,7 @@ public class StatsService {
                         .toList());
     }
 
-    /**
-     * Recette détaillée — panel headers (Change C): one aggregated row per event,
-     * with a sell-through rate computed from the totals. The per-model rows are
-     * loaded separately on expand (recetteDetailRows), so this list stays small.
-     */
+
     public List<RecetteEventHeaderDto> recetteDetailHeaders(Integer year, boolean refresh) {
         return cached("detailHeaders:" + year, refresh, () ->
                 repo.recetteDetailHeaders(year).stream()
@@ -166,11 +131,7 @@ public class StatsService {
                         .toList());
     }
 
-    /**
-     * Recette détaillée — per-model rows for ONE event (Change C). Always read
-     * live (not cached): it is a small, on-demand call triggered by expanding a
-     * panel, so it should reflect the latest counters. Taux = vendu / généré.
-     */
+
     public List<RecetteModelRowDto> recetteDetailRows(int eventId) {
         return repo.recetteDetailRows(eventId).stream()
                 .map(p -> new RecetteModelRowDto(
@@ -202,11 +163,7 @@ public class StatsService {
     }
 
     // --------------------------------------------- Statistique des tourniquets
-    /**
-     * Groups the per-(event x model) rows into one block per event, computing the
-     * header totals (Audience, Transactions Billets/Vouchers, Tourniquets) from the
-     * rows so they always match the table. Event order from the query is preserved.
-     */
+
     public List<TourniquetEventDto> tourniquets(Integer year, boolean refresh) {
         return cached("tourniquets:" + year, refresh, () -> loadTourniquets(year));
     }

@@ -8,40 +8,9 @@ import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 
-/**
- * Read-only statistics queries. Extends the bare Repository marker (not
- * JpaRepository) so no save/delete methods are exposed at all.
- *
- * Every query is an aggregate (no full-table fetch). Aliases are QUOTED so the
- * result column labels keep their exact case and bind to the projection getters
- * (PostgreSQL lowercases unquoted aliases, which would break the mapping).
- *
- * Scan -> event attribution: a scan belongs to the event whose ddate equals the
- * scan's datetransaction. This avoids the "FIH" pass-container event (ref 58,
- * dated 1970) absorbing every pass scan. porte is normalized with lower().
- *
- * YEAR AWARENESS (added for multi-edition support)
- * ------------------------------------------------
- * The database may hold several festival editions across different years. Every
- * query now takes a nullable :year parameter, filtered by the YEAR of
- * evenement.ddate. The filter is written as `(:year IS NULL OR ...)` so that:
- *   - :year = NULL  -> "Toutes les années": reproduces the ORIGINAL numbers
- *                      byte-for-byte (verified against the dev backup).
- *   - :year = 2025  -> only that edition.
- *
- * For the flat count queries (overview, ticket-types, gate breakdown) the guard
- * uses an `IN (SELECT ddate/reference FROM evenement WHERE year = :year)`
- * subquery rather than a JOIN, precisely so the NULL case stays identical to the
- * pre-year behaviour (a JOIN would have dropped the ~86 scans whose date matches
- * no event). Nothing here writes; all methods are SELECT-only.
- */
 public interface StatsRepository extends Repository<Tturnstile, Integer> {
 
-    /**
-     * Distinct festival years present in evenement.ddate, most-recent first.
-     * 3.4: the 1970 "FIH" sentinel event is hidden via a simple year cutoff
-     * (kept > 2000) so only real editions appear in the selector.
-     */
+
     @Query(value = """
             SELECT DISTINCT extract(year FROM ddate)::int AS yr
             FROM evenement
@@ -192,23 +161,7 @@ public interface StatsRepository extends Repository<Tturnstile, Integer> {
     List<HourProjection> entriesByHour(@Param("id") int id);
 
     // ------------------------------------------------------------------ Recette
-    // Revenue is derived purely from the `generation` table (one row per
-    // event x model): prix (unit price) and the counter/stock columns. Both
-    // queries are year-filtered by evenement.ddate, exactly like the rest.
 
-    /**
-     * Recette résumé: revenue (TND) per event, split Billet / Voucher.
-     *
-     * Money only (3.1): only money-bearing models (prix > 0) are counted. Free
-     * items (invitations, prix = 0) belong to Badges/Invitations, not revenue,
-     * so they are excluded here. Kit removed earlier (counterkit is 0 everywhere).
-     *
-     * SCALE: this is a single SQL GROUP BY over `generation` (one row per
-     * event x model — ~129 rows in prod, and it does NOT grow when tickets are
-     * sold, only when an event/model is created). It reads the pre-aggregated
-     * prix/counter columns; it never touches the large billet/voucher/tturnstile
-     * tables. Cost is independent of ticketing volume.
-     */
     @Query(value = """
             SELECT e.reference AS "eventId", e.titre AS "eventTitle", e.ddate AS "eventDate",
                    COALESCE(SUM(g.counterbillet  * g.prix), 0) AS "billet",
@@ -223,18 +176,7 @@ public interface StatsRepository extends Repository<Tturnstile, Integer> {
             """, nativeQuery = true)
     List<RecetteSummaryProjection> recetteSummary(@Param("year") Integer year);
 
-    /**
-     * Recette détaillée — HEADERS (3.1, money only): one aggregated row per event,
-     * restricted to money-bearing models (prix > 0). Génération = SUM(stock*),
-     * Vendu = SUM(counter*), Reste = générés - vendus, Recette = SUM(counter*prix),
-     * all over paid models only. Free invitations (prix = 0) and their
-     * badge_affectation assignments are excluded entirely — they are head-count,
-     * tracked in the Badges/Invitations module, never in revenue. The per-model
-     * rows are loaded separately, on expand.
-     *
-     * Single SQL GROUP BY over `generation` — same cheap shape as the résumé;
-     * it never touches the large billet/voucher/tturnstile tables.
-     */
+
     @Query(value = """
             SELECT e.reference AS "eventId", e.titre AS "eventTitle", e.ddate AS "eventDate",
                    COALESCE(SUM(g.stockbillet + g.stockvoucher), 0)                          AS "totalGenere",
@@ -251,12 +193,7 @@ public interface StatsRepository extends Repository<Tturnstile, Integer> {
             """, nativeQuery = true)
     List<RecetteEventHeaderProjection> recetteDetailHeaders(@Param("year") Integer year);
 
-    /**
-     * Recette détaillée — ROWS (3.1, money only): the per-model lines for ONE
-     * event, fetched lazily when its panel is expanded. Restricted to paid models
-     * (prix > 0); free invitation lines are not rendered in Recette at all.
-     * Filtered by event id, which already pins a single edition, so no year guard.
-     */
+
     @Query(value = """
             SELECT m.reference AS "modelId", m.modele AS "modelName",
                    g.prix AS "montant",
@@ -276,13 +213,9 @@ public interface StatsRepository extends Repository<Tturnstile, Integer> {
     List<RecetteModelRowProjection> recetteDetailRows(@Param("eventId") int eventId);
 
     // -------------------------------------------------------- Recette par guichet
-    // Box-office report driven by the point-of-sale tables (vente / livraison /
-    // kit), NOT by generation. These tables are empty in this edition, so the
-    // report is empty until guichet activity is recorded. Year-filtered by
-    // evenement.ddate, like everything else.
 
-    /** Recette par guichet — résumé: guichet revenue (TND) per event, split Billet / Kit. */
-    @Query(value = """
+
+     @Query(value = """
             SELECT e.reference AS "eventId", e.titre AS "eventTitle", e.ddate AS "eventDate",
                    COALESCE(vb.recette, 0) AS "billet",
                    COALESCE(kk.recette, 0) AS "kit",
@@ -300,8 +233,7 @@ public interface StatsRepository extends Repository<Tturnstile, Integer> {
             """, nativeQuery = true)
     List<RecetteGuichetSummaryProjection> recetteGuichetSummary(@Param("year") Integer year);
 
-    /** Recette par guichet — détail: per (event x model) delivery + sales breakdown. */
-    @Query(value = """
+     @Query(value = """
             SELECT e.reference AS "eventId", e.titre AS "eventTitle", e.ddate AS "eventDate",
                    m.reference AS "modelId", m.modele AS "modelName",
                    COALESCE(l.livraison, 0)    AS "billetLivraison",
@@ -334,10 +266,6 @@ public interface StatsRepository extends Repository<Tturnstile, Integer> {
     List<RecetteGuichetDetailProjection> recetteGuichetDetail(@Param("year") Integer year);
 
     // ----------------------------------------------------- Statistique des tourniquets
-    // Per (event x model): accessible barcodes (issued billet/voucher rows) and
-    // turnstile transactions. Each scan is resolved to its billet/voucher and
-    // hence to that ticket's event x model (LEFT JOINs, so an unresolved scan is
-    // simply not attributed rather than dropped or mis-counted).
 
     @Query(value = """
             WITH codes AS (
@@ -375,11 +303,7 @@ public interface StatsRepository extends Repository<Tturnstile, Integer> {
     List<TourniquetProjection> tourniquets(@Param("year") Integer year);
 
     // ------------------------------------------------- Analyse des rejets (§5 / Part C)
-    // Refused turnstile transactions (transactionstate = false). Each scan resolves
-    // to its billet/voucher and hence to the event used for the year filter. All
-    // read-only. The description text is grouped into stable categories with a CASE.
 
-    /** Total refused + total scans for the year (accepted = total - refused). */
     @Query(value = """
             SELECT count(*) FILTER (WHERE t.transactionstate = false) AS rejets,
                    count(*) AS total

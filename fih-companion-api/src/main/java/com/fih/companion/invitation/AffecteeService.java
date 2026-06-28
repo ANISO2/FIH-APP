@@ -27,49 +27,17 @@ import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/**
- * Reads and writes the "Affectée à" name for invitation billets.
- *
- * This is the ONLY service in the app that writes. It writes rows in the
- * app-owned badge_affectation table and never touches a legacy table.
- *
- * AUTO-NUMBERED UNIQUE NAMES (Change A)
- * -------------------------------------
- * The admin only ever types a BASE name (e.g. "ANIS"). We never store the bare
- * base and we never reject a "duplicate name". Instead we always append a
- * continuing, zero-padded number so the stored value is unique:
- *   - base is new            -> ANIS-01
- *   - ANIS-01, ANIS-02 exist -> ANIS-03   (max existing number + 1, NOT a count)
- *   - a lot of N             -> ANIS-(k) … ANIS-(k+N-1), continuing the sequence
- * Base matching is case-insensitive, so "anis" and "ANIS" share one sequence.
- * A UNIQUE constraint on badge_affectation.affectee_a is the safety net; if two
- * admins assign at the very same instant and collide, we simply recompute the
- * next number and retry (see {@link #set} / {@link #assignLot}).
- *
- * ONE-TIME RULE
- * -------------
- * An invitation may be named only once. Once a row exists, the name is permanent:
- * {@link #set} rejects re-assignment with 409 Conflict, and the lot endpoints
- * refuse to touch any serial that already has a name. (Re-printing the PDF is a
- * separate action and stays allowed — see {@link #markPrinted}.)
- */
+
 @Service
 public class AffecteeService {
 
-    /** How many times we retry a write if the affectee_a UNIQUE safety net trips. */
-    private static final int NUMBERING_RETRIES = 5;
+     private static final int NUMBERING_RETRIES = 5;
 
     private final BadgeAffectationRepository affectationRepository;
     private final BilletRepository billetRepository;
     private final BadgeProperties badgeProperties;
 
-    /**
-     * A reference to this same bean, injected lazily by Spring. We call the
-     * transactional *Once methods THROUGH this proxy (self.setOnce(...)) so each
-     * attempt runs in its own transaction. Calling them directly (this.setOnce)
-     * would bypass Spring's transaction proxy and the retry would not get a fresh
-     * transaction. @Lazy breaks the "a bean that needs itself" startup cycle.
-     */
+
     @Autowired
     @Lazy
     private AffecteeService self;
@@ -82,18 +50,14 @@ public class AffecteeService {
         this.badgeProperties = badgeProperties;
     }
 
-    /** Current name for a serial, if one has been set. Read-only. */
-    @Transactional(readOnly = true)
+     @Transactional(readOnly = true)
     public Optional<AffecteeDto> get(String numeroserie) {
         return affectationRepository.findById(numeroserie).map(this::toDto);
     }
 
     // -------------------------------------------------------------- single (A)
 
-    /**
-     * Assign the name for an invitation serial ONCE. The admin gives a BASE name;
-     * we store BASE-NN (Change A). Retries on the rare UNIQUE collision.
-     */
+
     public AffecteeDto set(String numeroserie, String name, String updatedBy) {
         for (int attempt = 0; attempt < NUMBERING_RETRIES; attempt++) {
             try {
@@ -106,8 +70,7 @@ public class AffecteeService {
                 "Conflit de numérotation, veuillez réessayer.");
     }
 
-    /** One transactional attempt of {@link #set}. Public so the proxy can wrap it. */
-    @Transactional
+     @Transactional
     public AffecteeDto setOnce(String numeroserie, String name, String updatedBy) {
         Billet billet = billetRepository.findByNumeroserie(numeroserie)
                 .orElseThrow(() -> new ResponseStatusException(
@@ -132,8 +95,7 @@ public class AffecteeService {
                     "Cette invitation est déjà affectée et ne peut plus être modifiée.");
         }
 
-        // Change A: never store the bare base — always BASE-NN, continuing the
-        // sequence from the highest number already used for this base.
+         // sequence from the highest number already used for this base.
         int next = nextNumberForBase(base);
         String unique = formatName(base, next, widthFor(next));
 
@@ -141,10 +103,8 @@ public class AffecteeService {
         return toDto(affectationRepository.save(entity));
     }
 
-    // ------------------------------------------------------------------ lot (A/C)
 
-    /** Read-only dry-run of a lot: matched rows, proposed names, conflicts, warnings. */
-    @Transactional(readOnly = true)
+     @Transactional(readOnly = true)
     public LotPreviewDto previewLot(LotRequest req) {
         Lot lot = buildLot(req);
 
@@ -172,10 +132,7 @@ public class AffecteeService {
                 baseUsed, canAssign, items, assignedSerials);
     }
 
-    /**
-     * Assign a whole lot immutably. Blocks (409) if ANY serial in range is already
-     * named. Names continue the base sequence (Change A); retries on collision.
-     */
+
     public LotResultDto assignLot(LotRequest req, String updatedBy) {
         for (int attempt = 0; attempt < NUMBERING_RETRIES; attempt++) {
             try {
@@ -188,8 +145,7 @@ public class AffecteeService {
                 "Conflit de numérotation sur le lot, veuillez réessayer.");
     }
 
-    /** One transactional attempt of {@link #assignLot}. Public so the proxy can wrap it. */
-    @Transactional
+     @Transactional
     public LotResultDto assignLotOnce(LotRequest req, String updatedBy) {
         Lot lot = buildLot(req);
 
@@ -216,8 +172,7 @@ public class AffecteeService {
         return new LotResultDto(assigned.size(), assigned);
     }
 
-    /** CSV manifest of the assigned names in a range: nom,numeroserie,codebarre,evenement. */
-    @Transactional(readOnly = true)
+     @Transactional(readOnly = true)
     public String manifestCsv(String startSerie, String endSerie) {
         String start = trimOr400(startSerie, "Le numéro de série de début est obligatoire.");
         String end = trimOr400(endSerie, "Le numéro de série de fin est obligatoire.");
@@ -233,17 +188,14 @@ public class AffecteeService {
         return sb.toString();
     }
 
-    /** §6 — stamp printed_at on every serial that has a name (others are skipped). */
-    @Transactional
+     @Transactional
     public void markPrinted(Collection<String> serials) {
         if (serials == null || serials.isEmpty()) return;
         affectationRepository.markPrinted(serials, LocalDateTime.now());
     }
 
-    // ----------------------------------------------------------------- helpers
 
-    /** Shared lot computation used by both preview and assign. */
-    private Lot buildLot(LotRequest req) {
+     private Lot buildLot(LotRequest req) {
         if (req == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Requête de lot manquante.");
         }
@@ -263,9 +215,7 @@ public class AffecteeService {
             else nonInvitation++;
         }
 
-        // Change A: continue the base sequence. If ANIS-01, ANIS-02 already exist
-        // and the lot has 50 rows, names run ANIS-03 … ANIS-52 (start = max + 1).
-        // Padding is wide enough for the largest number in the run (min 2 digits).
+
         int total = eligibleRows.size();
         int startNum = nextNumberForBase(baseName);
         int lastNum = startNum + Math.max(total, 1) - 1;
@@ -285,12 +235,7 @@ public class AffecteeService {
         return lot;
     }
 
-    /**
-     * Change A — the next free number for a base name. We read every stored name
-     * that belongs to this base, keep only the ones shaped exactly "base-<digits>"
-     * (case-insensitive), and return (highest digits) + 1. A brand-new base gives
-     * 1. We use the MAX, not the count, so deletions/gaps never reuse a number.
-     */
+
     private int nextNumberForBase(String base) {
         Pattern shape = Pattern.compile("^" + Pattern.quote(base) + "-(\\d+)$", Pattern.CASE_INSENSITIVE);
         int max = 0;
@@ -301,20 +246,17 @@ public class AffecteeService {
                 try {
                     max = Math.max(max, Integer.parseInt(m.group(1)));
                 } catch (NumberFormatException ignore) {
-                    // absurdly long number — ignore it rather than fail the assign
-                }
+                 }
             }
         }
         return max + 1;
     }
 
-    /** Zero-padded "BASE-07" style name. */
-    private String formatName(String base, int number, int width) {
+     private String formatName(String base, int number, int width) {
         return String.format("%s-%0" + width + "d", base, number);
     }
 
-    /** Padding width: at least 2 digits, more if the number itself is longer. */
-    private int widthFor(int number) {
+     private int widthFor(int number) {
         return Math.max(2, Integer.toString(Math.max(number, 1)).length());
     }
 
@@ -324,8 +266,7 @@ public class AffecteeService {
         return t;
     }
 
-    /** Minimal CSV escaping (wrap in quotes when the value has a comma/quote/newline). */
-    private String csv(String v) {
+     private String csv(String v) {
         if (v == null) return "";
         if (v.contains(",") || v.contains("\"") || v.contains("\n")) {
             return "\"" + v.replace("\"", "\"\"") + "\"";
@@ -338,8 +279,7 @@ public class AffecteeService {
                 e.getUpdatedBy(), e.getPrintedAt());
     }
 
-    /** Small carriers so preview and assign share one computation. */
-    private static final class Lot {
+     private static final class Lot {
         String baseName;
         List<Assignment> eligible;
         int nonInvitationCount;

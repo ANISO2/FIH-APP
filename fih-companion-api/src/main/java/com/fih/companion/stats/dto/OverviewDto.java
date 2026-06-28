@@ -2,8 +2,7 @@ package com.fih.companion.stats.dto;
 
 import java.time.LocalDate;
 
-/** Global KPIs for the top of the dashboard. */
-public record OverviewDto(
+ public record OverviewDto(
         long totalEvents,
         long totalBillets,
         long totalVouchers,

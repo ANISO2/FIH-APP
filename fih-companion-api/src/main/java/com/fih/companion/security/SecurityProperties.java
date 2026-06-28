@@ -2,8 +2,7 @@ package com.fih.companion.security;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
-/** Binds fih.security.* from application.yml / env. */
-@ConfigurationProperties(prefix = "fih.security")
+ @ConfigurationProperties(prefix = "fih.security")
 public class SecurityProperties {
 
     private Jwt jwt = new Jwt();

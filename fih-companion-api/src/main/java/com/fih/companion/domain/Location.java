@@ -4,8 +4,7 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import org.hibernate.annotations.Immutable;
 
-/** Venue. Read-only mapping of "location". */
-@Entity
+ @Entity
 @Table(name = "location")
 @Immutable
 @Getter

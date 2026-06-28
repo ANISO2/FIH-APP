@@ -4,8 +4,7 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import org.hibernate.annotations.Immutable;
 
-/** Issuance batch. Read-only mapping of "generation" (composite key). */
-@Entity
+ @Entity
 @Table(name = "generation")
 @Immutable
 @Getter

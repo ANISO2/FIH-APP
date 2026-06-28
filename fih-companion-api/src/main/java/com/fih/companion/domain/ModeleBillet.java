@@ -4,14 +4,7 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import org.hibernate.annotations.Immutable;
 
-/**
- * Ticket type. Read-only mapping of "modelebillet".
- *
- * NOTE on "access": it is a serialized Java ArrayList<String> stored as bytea.
- * We map it as an opaque byte[] and NEVER deserialize it here. Access-zone logic
- * lives in AccessZoneResolver, driven by configuration, so it is plain Java we
- * control and can query.
- */
+
 @Entity
 @Table(name = "modelebillet")
 @Immutable

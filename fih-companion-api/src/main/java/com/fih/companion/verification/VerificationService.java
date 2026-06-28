@@ -10,23 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
-/**
- * Computes a verdict for a billet or voucher. Strictly read-only: it reads rows
- * and returns a verdict, but NEVER marks anything used. The legacy turnstile
- * system owns that write.
- *
- * SPIKE FIX (gate opening): each verification is now ONE database round trip.
- * The finder joins billet/voucher + modelebillet + evenement + holder +
- * badge_affectation and returns exactly the fields below; previously this was
- * 5–6 separate queries. Under load it is round trips × concurrency that
- * saturates the shared database and the connection pool, so collapsing them is
- * the single biggest win — each scan now holds a pooled connection for one short
- * read, letting a small pool absorb a large burst.
- *
- * The verdict is still decided HERE, in Java, on every call, from the live
- * counters (utilisation / nombreacces / accesscounter). Nothing about the
- * verdict is cached — a ticket used a moment ago immediately reads ALREADY_USED.
- */
+
 @Service
 @Transactional(readOnly = true)
 public class VerificationService {

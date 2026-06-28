@@ -1,7 +1,5 @@
 package com.fih.companion.stats.projection;
-
-/** Native-query projection backing the "Recette détaillée" per-model rows. */
-public interface RecetteModelRowProjection {
+ public interface RecetteModelRowProjection {
     int getModelId();
     String getModelName();
     double getMontant();

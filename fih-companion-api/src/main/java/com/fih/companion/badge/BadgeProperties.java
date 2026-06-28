@@ -10,54 +10,34 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/** Binds fih.badge.* from application.yml. */
-@ConfigurationProperties(prefix = "fih.badge")
+ @ConfigurationProperties(prefix = "fih.badge")
 public class BadgeProperties {
 
-    /** Folder holding the photos, named by the photo-key field. (Legacy; kept for binding.) */
-    private String photoDir = "D:/Bitaka/bitaka/fih-companion/photos";
-    /** Which record field is used as the filename: "codebarre" (fallback numeroserie). */
-    private String photoKey = "codebarre";
+     private String photoDir = "D:/Bitaka/bitaka/fih-companion/photos";
+     private String photoKey = "codebarre";
     private List<String> photoExtensions = List.of("jpg", "jpeg", "png");
 
-    /** Legacy portrait badge size in millimetres. (Kept for binding; e-ticket uses ticket-*-mm.) */
-    private double widthMm = 100;
+     private double widthMm = 100;
     private double heightMm = 150;
-    /** Above this many badges, /batch returns a ZIP of individual PDFs instead of one big PDF. */
-    private int zipThreshold = 150;
+     private int zipThreshold = 150;
 
     // ===================== e-ticket layout =====================
-    /** Landscape e-ticket page size in millimetres (matches the_format.jpeg, ratio 2.2). */
-    private double ticketWidthMm = 220;
+     private double ticketWidthMm = 220;
     private double ticketHeightMm = 100;
 
-    /**
-     * Event posters. Resolved per-ticket as slug(eventTitle).{ext}, e.g.
-     * "Salif Keita" -> salif-keita.jpg, falling back to poster-default.
-     */
+
     private String posterDir = "D:/Bitaka/bitaka/fih-companion/posters";
     private String posterDefault = "poster-default.jpg";
     private List<String> posterExtensions = List.of("jpg", "jpeg", "png");
 
-    /**
-     * Show time. The evenement table has no time column (only ddate), so the time
-     * printed on the ticket is config-driven: a default plus an optional per-date
-     * override map keyed by ddate in yyyy-MM-dd form. Edit without recompiling.
-     */
+
     private String showTime = "22:00";
     private Map<String, String> showTimes = new LinkedHashMap<>();
     // ===========================================================
 
-    /**
-     * modelebillet.reference values that are "invitation" models, as a COMMA-
-     * SEPARATED STRING. PDF/badge generation is restricted to THESE models only.
-     * Scalar String (not List) so a placeholder default with commas resolves
-     * before we parse it ourselves. Seeded with the Invitation family.
-     */
     private String invitationModels = "3,36,38,39,40,41";
 
-    /** Parsed + cached view of {@link #invitationModels}. */
-    private Set<Integer> invitationModelCache;
+     private Set<Integer> invitationModelCache;
 
     public String getPhotoDir() { return photoDir; }
     public void setPhotoDir(String photoDir) { this.photoDir = photoDir; }
@@ -90,8 +70,7 @@ public class BadgeProperties {
     public Map<String, String> getShowTimes() { return showTimes; }
     public void setShowTimes(Map<String, String> showTimes) { this.showTimes = showTimes; }
 
-    /** Time to print for an event date: the per-date override if present, else the default. */
-    public String resolveShowTime(LocalDate date) {
+     public String resolveShowTime(LocalDate date) {
         if (date != null && showTimes != null) {
             String v = showTimes.get(date.toString()); // yyyy-MM-dd
             if (v != null && !v.isBlank()) return v;
@@ -105,13 +84,11 @@ public class BadgeProperties {
         this.invitationModelCache = null; // re-parse on next access
     }
 
-    /** True when the given modelebillet.reference is an allowed invitation model. */
-    public boolean isInvitationModel(Integer modelId) {
+     public boolean isInvitationModel(Integer modelId) {
         return modelId != null && invitationModelSet().contains(modelId);
     }
 
-    /** Parsed set of allowed invitation model references (ignores blanks/garbage). */
-    public Set<Integer> invitationModelSet() {
+     public Set<Integer> invitationModelSet() {
         Set<Integer> cache = this.invitationModelCache;
         if (cache == null) {
             cache = new LinkedHashSet<>();
@@ -131,8 +108,7 @@ public class BadgeProperties {
         return cache;
     }
 
-    /** Allowed invitation model references as an ordered List (convenience). */
-    public List<Integer> invitationModelList() {
+     public List<Integer> invitationModelList() {
         return Arrays.asList(invitationModelSet().toArray(new Integer[0]));
     }
 }

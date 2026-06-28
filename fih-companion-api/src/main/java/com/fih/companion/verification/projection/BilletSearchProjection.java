@@ -2,12 +2,7 @@ package com.fih.companion.verification.projection;
 
 import java.time.LocalDate;
 
-/**
- * Closed interface projection for the backoffice "Vérification Billet" list
- * (3.2). Returns ONLY the columns shown in the billet table mockup — no entity
- * or relation is eager-loaded. Each getter maps to the matching quoted alias in
- * the native search query. Read-only.
- */
+
 public interface BilletSearchProjection {
     String getNumeroserie();
     String getCodebarre();

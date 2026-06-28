@@ -2,8 +2,7 @@ package com.fih.companion.evenement;
 
 import org.springframework.stereotype.Component;
 
-/** Converts the read-only entity into the API DTO. */
-@Component
+ @Component
 public class EventMapper {
 
     public EventDto toDto(Evenement e) {

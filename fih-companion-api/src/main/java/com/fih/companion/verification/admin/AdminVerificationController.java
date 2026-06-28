@@ -10,18 +10,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * Backoffice "Vérification" endpoints (3.2).
- *
- * SECURITY: mounted under /api/stats/** on purpose. SecurityConfig already locks
- * /api/stats/** to ROLE_ADMIN, and this sub-path is NOT in the mobile allow-list
- * (MOBILE_STATS_GET), so it is admin-only with ZERO security change — the mobile
- * device token cannot reach it and the mobile config is untouched.
- *
- * These are distinct from the mobile /api/verify/** verdict endpoints: here an
- * admin searches by an indexed code and gets a paginated LIST, then opens a
- * details modal. Read-only throughout; verdict/identity reads are never cached.
- */
+
 @RestController
 @RequestMapping("/api/stats/verification")
 public class AdminVerificationController {

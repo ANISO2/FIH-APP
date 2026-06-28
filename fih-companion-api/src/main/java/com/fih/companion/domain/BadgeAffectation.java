@@ -9,28 +9,7 @@ import lombok.Setter;
 
 import java.time.LocalDateTime;
 
-/**
- * The "Affectée à" name printed on an invitation badge.
- *
- * THIS IS THE ONLY MUTABLE ENTITY IN THE APPLICATION. Every other entity maps a
- * legacy table and is @Immutable / read-only. This one maps a brand-new table
- * (badge_affectation) that the companion app owns, so it is safe to write here —
- * and nowhere else.
- *
- * The primary key is the invitation billet's serial (numeroserie). There is NO
- * foreign key to billet, on purpose: a FK would couple this table to the legacy
- * billet table (locks, cascade rules, the other team's sign-off). The link is
- * purely logical — we store the same serial and join on it only when we need the
- * name. Because the id is the serial itself, JpaRepository.save() naturally
- * "upserts": it INSERTs a new serial and UPDATEs an existing one.
- *
- * ONE-TIME RULE (Change B): once a row exists the name is permanent. The service
- * refuses to overwrite affectee_a; only printed_at is allowed to change.
- *
- * printed_at (§6): nullable timestamp set when a PDF for this serial is
- * generated. It lets the UI show "affecté" vs "imprimé" without breaking the
- * one-time rule (the name never changes; only this stamp does).
- */
+
 @Entity
 @Table(name = "badge_affectation")
 @Getter

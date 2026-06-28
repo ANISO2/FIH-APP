@@ -9,8 +9,7 @@ import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
 
-/** Issues and validates the app's own JWTs (HS256). */
-@Service
+ @Service
 public class JwtService {
 
     private final SecretKey key;
@@ -34,8 +33,7 @@ public class JwtService {
                 .compact();
     }
 
-    /** Returns the claims if the token is valid; throws if not. */
-    public Claims parse(String token) {
+     public Claims parse(String token) {
         return Jwts.parser()
                 .verifyWith(key)
                 .build()

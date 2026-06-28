@@ -12,15 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
-/**
- * Lazy detail loader for the ℹ screen: management extras + the Public/VIP access
- * history. Strictly read-only. Kept OFF the hot verify path so scanning stays a
- * single lean query; this only runs when the operator opens details.
- *
- * All access-log reads are by the INDEXED numeroserie (billet/voucher FK on
- * tturnstile/vipaccess), never the un-indexed codebarre — so detail loads are
- * fast even for a ticket with thousands of scans.
- */
+
 @Service
 @Transactional(readOnly = true)
 public class TicketDetailsService {

@@ -8,10 +8,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 
-/**
- * Voucher. Read-only mapping of "voucher" (PK = numeroserie).
- * Nullable boolean columns are mapped as Boolean (wrapper) so a NULL read works.
- */
+
 @Entity
 @Table(name = "voucher")
 @Immutable

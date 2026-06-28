@@ -8,25 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.Repository;
 import org.springframework.data.repository.query.Param;
 
-/**
- * Backoffice "Vérification Billet" search (3.2). Separate, read-only repository
- * (extends the bare Repository marker — no save/delete exposed) so the existing
- * BilletRepository is left untouched.
- *
- * SCALE (built for ~100 000 rows):
- *  - Every lookup is on an INDEXED column only: codebarre (unique index
- *    billet_codebarre_key + index_billet_codebarre) or numeroserie (PK). Under
- *    the DB's C.UTF-8 collation an equality match is an index seek, and a
- *    `LIKE 'prefix%'` is index-eligible as well; we never offer "contains".
- *  - Interface projection returns ONLY the displayed columns — no entity or
- *    relation is materialised. The LEFT JOINs (event/model/vente/livraison/
- *    livreur) only enrich the row, never filter, so the COUNT query runs on
- *    `billet` alone and stays cheap.
- *  - Server-side pagination via Pageable; rows are never all loaded.
- *
- * The four methods are split by column and by exact/prefix so each binds to a
- * single index path (no OR across columns, which would defeat the index).
- */
+
 public interface AdminBilletSearchRepository extends Repository<Billet, String> {
 
     String SELECT = """

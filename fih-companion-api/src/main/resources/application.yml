@@ -15,22 +15,11 @@ spring:
     password: ${FIH_DB_PASSWORD:fih_ro_pwd}
     driver-class-name: org.postgresql.Driver
     hikari:
-      # Optional belt-and-braces: when true, every pooled connection is marked
-      # read-only at the JDBC layer. We keep it FALSE in Phase 1 on purpose, so
-      # the /api/diagnostics/db write test reaches the database and you can see
-      # the fih_ro ROLE itself reject it ("permission denied"). The role is the
-      # real guarantee; you can flip this to true later as an extra layer.
+
       read-only: false
       # ----------------------------------------------------------------------
-      # Pool tuning for the festival spike on a SHARED database (§5).
-      # The DB is shared with other apps and has a global connection cap, so we
-      # stay a good citizen: a SMALL pool, held briefly. Because verification is
-      # now ONE short query per scan (see VerificationService), a few connections
-      # cycle fast enough to absorb a burst of scanners. All values are env-
-      # overridable so you can tune on the server without rebuilding.
       pool-name: fih-pool
-      # Keep this modest. Sum of (this × app instances) must stay well under the
-      # server's max_connections, leaving room for the other apps. 10 is a sane
+       # server's max_connections, leaving room for the other apps. 10 is a sane
       # start for one instance; raise only with metrics + DBA sign-off.
       maximum-pool-size: ${FIH_DB_POOL_MAX:10}
       minimum-idle: ${FIH_DB_POOL_MIN_IDLE:2}
@@ -46,12 +35,9 @@ spring:
 
   jpa:
     hibernate:
-      # validate = check that the entities match the existing schema, but NEVER
-      # create, alter, or drop anything. This is the safe setting for a system
-      # that maps a database it does not own.
+
       ddl-auto: validate
-    # Close the persistence context at the end of the service call, not at the
-    # end of the HTTP response. Cleaner, avoids lazy-loading surprises.
+
     open-in-view: false
     show-sql: false
     properties:
@@ -62,23 +48,24 @@ spring:
 # App-specific configuration.
 # ---------------------------------------------------------------------------
 fih:
-  # §5 — short cache for the HEAVY read-only stats (Recette résumé/détaillée
-  # headers, tourniquets, rejets). Seconds a response may be reused before being
-  # recomputed. The "Actualiser" button (?refresh=true) always bypasses it. Set
-  # to 0 to disable (always live). Trade-off: higher = fewer DB scans but up to
-  # <value>s stale. On a shared DB this protects everyone from repeated heavy
-  # tturnstile scans during the gate-open spike; 30 s is plenty for an operator.
-  # Verification/verdicts are NEVER cached — only these aggregates are. The old
-  # key fih.recette.cache-ttl-seconds is still honoured as a fallback.
+
+  # ===========================================================================
+  # External VOUCHER-INFO web service
+
+  # ===========================================================================
+  voucher-service:
+    base-url: ${FIH_VOUCHER_BASE_URL:}        # e.g. https://billetterie.example.tn/api/voucher-info
+    api-key:  ${FIH_VOUCHER_API_KEY:}         # optional; sent as X-Api-Key header
+    connect-timeout-ms: ${FIH_VOUCHER_CONNECT_TIMEOUT_MS:2000}
+    read-timeout-ms:    ${FIH_VOUCHER_READ_TIMEOUT_MS:3000}
+
   stats:
     cache-ttl-seconds: ${FIH_STATS_CACHE_TTL:30}
 
   photos:
     folder: ${FIH_PHOTOS_FOLDER:./photos}
 
-  # Part A.2 — access zones per modelebillet.reference. Codes: P=Public, V=Vip,
-  # R=Press. Edit here with no recompile. (modelebillet 6 "Pass" is unlimited via
-  # maxaccess=0, which is separate from the zone list below.)
+
   access-zones:
     "3":  [P, V, R]   # Invitation (1P)
     "4":  [P, V]      # Carte VIP
@@ -102,16 +89,13 @@ fih:
     "40": [P, V]      # Invitation PDF 2
     "41": [P, V, R]   # Invitation PDF 3
 
-  # Part C — security. CHANGE THE SECRET and device token before any real use.
   security:
     jwt:
       secret: ${FIH_JWT_SECRET:change-me-to-a-long-random-secret-of-32+chars!!}
       expiration-minutes: ${FIH_JWT_EXPIRATION_MINUTES:480}
     device-token: ${FIH_DEVICE_TOKEN:dev-device-token}
 
-  # Phase 6 — badge PDF generation. Forward slashes are SAFER than backslashes in
-  # YAML on Windows: a backslash starts an escape sequence, so "D:\photos" can be
-  # misread, while "D:/photos" is always taken literally. Java accepts both.
+
   badge:
     photo-dir: ${FIH_PHOTO_DIR:D:/Bitaka/bitaka/fih-companion/photos}
     photo-key: codebarre            # filename field; falls back to numeroserie
@@ -120,35 +104,22 @@ fih:
     height-mm: 150
     zip-threshold: 150              # batches larger than this download as a ZIP
 
-    # 3.1 — PDF/badge generation is restricted to these invitation models only
-    # (modelebillet.reference). The availability list, item lists, photo-check
-    # and all generation endpoints expose/accept ONLY these. Edit with no
-    # recompile. Seeded with the Invitation family:
-    #   3  Invitation 1P
-    #   36 Invitation PDF
-    #   38 Invitation PDF-GAT
-    #   39 Invitation PDF-Artiste
-    #   40 Invitation PDF 2
-    #   41 Invitation PDF 3
+
     invitation-models: ${FIH_INVITATION_MODELS:3,36,38,39,40,41}
 
-    # ===================== NEW: e-ticket layout =====================
-    # Landscape e-ticket page size (matches the_format.jpeg, ratio 2.2).
+    # =====================  e-ticket layout =====================
     ticket-width-mm: 220
     ticket-height-mm: 100
 
-    # Event posters. Resolved per-ticket as slug(eventTitle).{ext}
-    # e.g. "Salif Keita" -> salif-keita.jpg ; falls back to poster-default.
+
     poster-dir: ${FIH_POSTER_DIR:D:/Bitaka/bitaka/fih-companion/posters}
     poster-default: poster-default.jpg
     poster-extensions: [jpg, jpeg, png]
 
-    # The evenement table has no time column (only ddate), so showtime is
-    # config-driven. Change here without recompiling.
+
     show-time: ${FIH_SHOW_TIME:22:00}
     # ================================================================
     # Optional per-event overrides, keyed by event date (yyyy-MM-dd = ddate).
-    # Anything not listed uses show-time above. Leave empty if every show is 22:00.
 
 
 logging:

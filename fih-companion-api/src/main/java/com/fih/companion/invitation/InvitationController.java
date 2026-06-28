@@ -23,14 +23,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.nio.charset.StandardCharsets;
 import java.security.Principal;
 
-/**
- * Admin-only endpoints for the invitation badge name ("Affectée à").
- *
- * Locked to ROLE_ADMIN by SecurityConfig (/api/invitations/**). These are the
- * only write endpoints in the application; they write to the app-owned
- * badge_affectation table via {@link AffecteeService} and never to a legacy
- * table.
- */
+
 @RestController
 @RequestMapping("/api/invitations")
 public class InvitationController {
@@ -41,20 +34,14 @@ public class InvitationController {
         this.service = service;
     }
 
-    /** Current name for a serial. 404 if no name has been set yet. */
-    @GetMapping("/{numeroserie}/affectee")
+     @GetMapping("/{numeroserie}/affectee")
     public AffecteeDto get(@PathVariable String numeroserie) {
         return service.get(numeroserie)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "Aucun nom enregistré pour ce billet."));
     }
 
-    /**
-     * Assign the name ONCE (Change B). The admin username comes from the JWT:
-     * Spring injects the authenticated user as {@link Principal}, and
-     * principal.getName() is the token subject (the username). If the serial is
-     * already assigned the service returns 409 Conflict.
-     */
+
     @PutMapping("/{numeroserie}/affectee")
     public AffecteeDto set(@PathVariable String numeroserie,
                            @Valid @RequestBody AffecteeRequest request,
@@ -63,21 +50,13 @@ public class InvitationController {
         return service.set(numeroserie, request.name(), updatedBy);
     }
 
-    // ---------------------------------------------------------------- lot (C)
 
-    /**
-     * Dry-run a lot before assigning: returns the matched invitations, the names
-     * they would receive (baseName-01 …), and any conflicts/warnings. Read-only.
-     */
     @PostMapping("/affectation/lot/preview")
     public LotPreviewDto previewLot(@Valid @RequestBody LotRequest request) {
         return service.previewLot(request);
     }
 
-    /**
-     * Assign a whole lot immutably. Returns 409 Conflict (with the list) if ANY
-     * serial in the range is already assigned, so the lot is all-or-nothing.
-     */
+
     @PostMapping("/affectation/lot")
     public LotResultDto assignLot(@Valid @RequestBody LotRequest request, Principal principal) {
         String updatedBy = principal == null ? null : principal.getName();

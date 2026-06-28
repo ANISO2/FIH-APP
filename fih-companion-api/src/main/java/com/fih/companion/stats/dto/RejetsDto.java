@@ -4,11 +4,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
-/**
- * "Analyse des rejets" — read-only study of refused turnstile transactions
- * (tturnstile.transactionstate = false). Year-aware (by the resolved event's
- * ddate, like every other report). One composite payload feeds the whole page.
- */
+
 public record RejetsDto(
         long totalRejets,
         long totalAcceptes,

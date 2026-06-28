@@ -7,14 +7,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
-/**
- * GET /api/events -> the 34 events as DTOs.
- *
- * @Transactional(readOnly = true) is our default transaction posture for read
- * paths: it tells Spring/Hibernate this unit of work will not write, which lets
- * the driver/DB optimize and documents intent. It is defense-in-depth on top of
- * the fih_ro role.
- */
+
 @RestController
 @RequestMapping("/api/events")
 public class EventController {

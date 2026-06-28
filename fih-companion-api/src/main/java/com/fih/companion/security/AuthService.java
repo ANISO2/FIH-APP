@@ -7,10 +7,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-/**
- * Read-only admin login. Looks up the user, verifies they are an admin, and
- * compares the password. On any failure it returns 401. Nothing is written.
- */
+
 @Service
 @Transactional(readOnly = true)
 public class AuthService {

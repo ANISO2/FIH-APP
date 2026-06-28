@@ -7,8 +7,7 @@ import org.hibernate.annotations.Immutable;
 import java.time.LocalDate;
 import java.time.LocalTime;
 
-/** Voucher order. Read-only mapping of "voucherorder". */
-@Entity
+ @Entity
 @Table(name = "voucherorder")
 @Immutable
 @Getter

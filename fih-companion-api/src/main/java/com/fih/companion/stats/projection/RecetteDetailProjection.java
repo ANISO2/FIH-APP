@@ -2,8 +2,7 @@ package com.fih.companion.stats.projection;
 
 import java.sql.Date;
 
-/** Native-query projection backing the "Recette détaillée" table. */
-public interface RecetteDetailProjection {
+ public interface RecetteDetailProjection {
     int getEventId();
     String getEventTitle();
     Date getEventDate();

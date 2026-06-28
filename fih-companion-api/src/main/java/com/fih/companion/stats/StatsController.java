@@ -9,14 +9,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
-/**
- * Read-only statistics endpoints. All of /api/stats/** is already locked behind
- * the admin JWT by SecurityConfig, so no extra security annotations are needed.
- *
- * Year filter: every dashboard endpoint accepts an optional {@code ?year=YYYY}.
- * Omit it (or send nothing) for "Toutes les années". The list of valid years is
- * served by {@code GET /api/stats/years} so the backoffice never hardcodes them.
- */
+
 @RestController
 @RequestMapping("/api/stats")
 public class StatsController {
@@ -27,8 +20,7 @@ public class StatsController {
         this.service = service;
     }
 
-    /** Distinct festival years present in the DB, most-recent first. */
-    @GetMapping("/years")
+     @GetMapping("/years")
     public List<Integer> years() {
         return service.availableYears();
     }
@@ -64,10 +56,7 @@ public class StatsController {
     }
 
     // ----------------------------------------------------------- Recette
-    // The summary and the détaillée panel HEADERS support an optional
-    // ?refresh=true (the "Actualiser" button) which bypasses the short-TTL
-    // server cache and reloads live. The per-event ROWS are loaded lazily, one
-    // event at a time, when a panel is expanded.
+
     @GetMapping("/recette/summary")
     public List<RecetteSummaryDto> recetteSummary(
             @RequestParam(required = false) Integer year,
@@ -89,7 +78,7 @@ public class StatsController {
         return service.recetteDetailRows(eventId);
     }
 
-    // ------------------------------------------------- Recette par guichet (§5.2)
+    // ------------------------------------------------- Recette par guichet
     @GetMapping("/recette/guichet/summary")
     public List<RecetteGuichetSummaryDto> recetteGuichetSummary(@RequestParam(required = false) Integer year) {
         return service.recetteGuichetSummary(year);
@@ -100,7 +89,7 @@ public class StatsController {
         return service.recetteGuichetDetail(year);
     }
 
-    // --------------------------------------------- Statistique des tourniquets (§5.3)
+    // --------------------------------------------- Statistique des tourniquets
     @GetMapping("/tourniquets")
     public List<TourniquetEventDto> tourniquets(
             @RequestParam(required = false) Integer year,
@@ -108,7 +97,7 @@ public class StatsController {
         return service.tourniquets(year, refresh);
     }
 
-    // --------------------------------------------- Analyse des rejets (Part C)
+    // --------------------------------------------- Analyse des rejets (
     @GetMapping("/rejets")
     public RejetsDto rejets(
             @RequestParam(required = false) Integer year,

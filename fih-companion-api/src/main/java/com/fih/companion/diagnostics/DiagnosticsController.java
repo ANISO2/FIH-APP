@@ -12,18 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-/**
- * GET /api/diagnostics/db
- *
- * Proves the read-only setup is working:
- *  1. connection alive + which DB user we are (expected: fih_ro)
- *  2. a real read (count of evenement)
- *  3. an INTENTIONAL write that is expected to FAIL; we catch the error and
- *     report it as positive proof that writes are blocked by the database.
- *
- * GET /api/diagnostics/modele/{reference}
- *  Part A acceptance: read a ModeleBillet and resolve its access zones.
- */
+
 @RestController
 @RequestMapping("/api/diagnostics")
 public class DiagnosticsController {
@@ -92,8 +81,7 @@ public class DiagnosticsController {
         return result;
     }
 
-    /** Unwrap nested exceptions to the most informative root message. */
-    private String rootMessage(Throwable t) {
+     private String rootMessage(Throwable t) {
         Throwable cur = t;
         while (cur.getCause() != null && cur.getCause() != cur) {
             cur = cur.getCause();

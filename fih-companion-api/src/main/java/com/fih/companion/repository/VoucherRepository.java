@@ -13,17 +13,11 @@ import java.util.Optional;
 
 public interface VoucherRepository extends JpaRepository<Voucher, String> {
 
-    /** Uses the existing DB index on codebarre. */
-    Optional<Voucher> findByCodebarre(String codebarre);
+     Optional<Voucher> findByCodebarre(String codebarre);
 
     Optional<Voucher> findByNumeroserie(String numeroserie);
 
-    /**
-     * SPIKE FIX — one query for a full voucher verification. Lookup by codebarre
-     * OR numeroserie (both indexed), join model/event and our badge_affectation.
-     * Live state (utilisation, accesscounter, dateannulation) selected raw; the
-     * verdict is decided in Java on every call, never cached.
-     */
+
     @Query(value = """
             SELECT v.numeroserie    AS "numeroserie",
                    v.codebarre      AS "codebarre",
@@ -49,10 +43,7 @@ public interface VoucherRepository extends JpaRepository<Voucher, String> {
             """, nativeQuery = true)
     Optional<VoucherVerifyProjection> findForVerification(@Param("code") String code);
 
-    /**
-     * DETAILS (lazy) — voucher management extras for the ℹ screen. Single row by
-     * PK; LEFT JOIN voucherorder on its indexed FK. Not on the hot scan path.
-     */
+
     @Query(value = """
             SELECT v.numeroserie  AS "numeroserie",
                    v.codebarre    AS "codebarre",
@@ -65,10 +56,6 @@ public interface VoucherRepository extends JpaRepository<Voucher, String> {
             """, nativeQuery = true)
     Optional<VoucherDetailsProjection> findVoucherDetails(@Param("numeroserie") String numeroserie);
 
-    /**
-     * DETAILS (lazy) — Public access log for a voucher (tturnstile.voucher,
-     * indexed by ix_tturnstile_fk_tturnstile_voucher). Newest first, capped.
-     */
     @Query(value = """
             SELECT t.reference        AS "reference",
                    t.codebarre        AS "codebarre",
@@ -83,8 +70,7 @@ public interface VoucherRepository extends JpaRepository<Voucher, String> {
             """, nativeQuery = true)
     List<AccessLogProjection> findPublicAccessLog(@Param("numeroserie") String numeroserie);
 
-    /** DETAILS (lazy) — VIP access log for a voucher (vipaccess.voucher, indexed). */
-    @Query(value = """
+     @Query(value = """
             SELECT t.reference        AS "reference",
                    t.codebarre        AS "codebarre",
                    t.datetransaction  AS "datetransaction",

@@ -8,17 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.Repository;
 import org.springframework.data.repository.query.Param;
 
-/**
- * Backoffice "Vérification Voucher" search (3.2). Separate, read-only repository
- * so VoucherRepository is left untouched.
- *
- * SCALE (built for ~100 000 rows): same approach as the billet search — lookups
- * only on indexed columns (codebarre unique index voucher_codebarre_key +
- * indexcodebarreonline; numeroserie PK), interface projection limited to the
- * displayed columns, COUNT on `voucher` alone (the LEFT JOINs enrich, never
- * filter), server-side pagination. Exact = index seek; prefix = index-eligible
- * under C.UTF-8; no "contains".
- */
+
 public interface AdminVoucherSearchRepository extends Repository<Voucher, String> {
 
     String SELECT = """

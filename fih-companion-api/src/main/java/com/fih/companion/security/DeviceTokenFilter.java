@@ -16,20 +16,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 import java.util.List;
 
-/**
- * Minimal device auth for the mobile verifier: if the "X-Device-Token" header
- * matches the configured shared token, grants ROLE_DEVICE.
- *
- * Hardened for the "jeton appareil invalide" (401) class of bugs:
- *  - Both the incoming header and the configured token are TRIMMED, so a stray
- *    space/newline (very common when the token comes from an env var, an IDE run
- *    config, or --dart-define) no longer causes a silent mismatch.
- *  - On startup the EXPECTED token is logged (masked), so you can confirm what
- *    the server wants.
- *  - On a mismatch the received vs expected are logged (masked), so a 401 tells
- *    you exactly why instead of being silent.
- * Masking keeps the secret out of the logs: only the first 3 chars + length.
- */
+
 @Component
 public class DeviceTokenFilter extends OncePerRequestFilter {
 
@@ -79,8 +66,7 @@ public class DeviceTokenFilter extends OncePerRequestFilter {
         return t == null ? "" : t.trim();
     }
 
-    /** e.g. "dev…(len=16)" — enough to compare, safe to log. */
-    private static String mask(String s) {
+     private static String mask(String s) {
         if (s == null || s.isEmpty()) return "<empty>";
         return s.substring(0, Math.min(3, s.length())) + "…(len=" + s.length() + ")";
     }

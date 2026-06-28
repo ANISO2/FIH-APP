@@ -1,7 +1,6 @@
 package com.fih.companion.stats.projection;
 
-/** Scalar counts for the overview (assembled with busiest event in the service). */
-public interface OverviewCountsProjection {
+ public interface OverviewCountsProjection {
     long getTotalEvents();
     long getTotalBillets();
     long getTotalVouchers();

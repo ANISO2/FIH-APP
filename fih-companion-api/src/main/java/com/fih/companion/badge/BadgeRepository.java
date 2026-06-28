@@ -9,20 +9,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 
-/**
- * Read-only queries for the badge feature. "Injected" records are billet + voucher
- * rows the legacy team created. Aliases are quoted so they bind to the projection
- * getters (PostgreSQL lowercases unquoted aliases).
- *
- * AFFECTÉE À / PRINTED_AT
- * -----------------------
- * The item queries LEFT JOIN our app-owned badge_affectation table on numeroserie
- * to surface the assigned name ("affecteeA") and the print stamp ("printedAt").
- * It is a LEFT JOIN, so records with no name set simply return NULL — nothing is
- * hidden. The name is also added to the free-text search so admins can find a
- * record by the name they typed. This is the only place these read queries touch
- * badge_affectation; the legacy tables stay strictly read-only.
- */
+
 public interface BadgeRepository extends Repository<Tturnstile, Integer> {
 
     @Query(value = """
@@ -100,8 +87,7 @@ public interface BadgeRepository extends Repository<Tturnstile, Integer> {
                     @Param("modelId") int modelId,
                     @Param("search") String search);
 
-    /** All records for a model (no paging) — used for "generate all". */
-    @Query(value = """
+     @Query(value = """
             SELECT 'BILLET' AS "type", b.numeroserie AS "numeroserie", b.codebarre AS "codebarre",
                    NULLIF(trim(coalesce(h.firstname, '') || ' ' || coalesce(h.lastname, '')), '') AS "holderName",
                    ba.affectee_a AS "affecteeA", ba.printed_at AS "printedAt"

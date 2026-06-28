@@ -14,22 +14,11 @@ import java.util.Optional;
 
 public interface BilletRepository extends JpaRepository<Billet, String> {
 
-    /** Uses the existing DB index on codebarre. */
-    Optional<Billet> findByCodebarre(String codebarre);
+     Optional<Billet> findByCodebarre(String codebarre);
 
     Optional<Billet> findByNumeroserie(String numeroserie);
 
-    /**
-     * SPIKE FIX — one query for a full billet verification (replaces 5–6 round
-     * trips). Looks up by codebarre OR numeroserie (both indexed: codebarre has a
-     * unique index, numeroserie is the PK) and joins everything the verdict and
-     * the result card need. ORDER BY (codebarre match) DESC keeps the old
-     * precedence: a codebarre hit wins over a numeroserie hit. holder /
-     * badge_affectation are LEFT JOINs (indexed: holder.billet, ba.numeroserie),
-     * so a missing name simply returns NULL. We select the live counters
-     * (utilisation, nombreacces) raw — the verdict is decided in Java, never
-     * cached — so the answer always reflects the current row.
-     */
+
     @Query(value = """
             SELECT b.numeroserie  AS "numeroserie",
                    b.codebarre    AS "codebarre",
@@ -56,11 +45,7 @@ public interface BilletRepository extends JpaRepository<Billet, String> {
             """, nativeQuery = true)
     Optional<BilletVerifyProjection> findForVerification(@Param("code") String code);
 
-    /**
-     * DETAILS (lazy) — management extras shown only when the operator opens the
-     * ℹ screen. Single row by PK (numeroserie); LEFT JOINs to livraison/vente on
-     * their indexed FKs. Not on the hot scan path.
-     */
+
     @Query(value = """
             SELECT b.numeroserie    AS "numeroserie",
                    b.codebarre      AS "codebarre",
@@ -75,12 +60,7 @@ public interface BilletRepository extends JpaRepository<Billet, String> {
             """, nativeQuery = true)
     Optional<BilletDetailsProjection> findBilletDetails(@Param("numeroserie") String numeroserie);
 
-    /**
-     * DETAILS (lazy) — Public access log for a billet, newest first, capped.
-     * Filtered by tturnstile.billet (= numeroserie), which IS indexed
-     * (ix_tturnstile_fk_tturnstile_billet) — so this stays fast no matter how
-     * large the log grows. We never filter the log by the un-indexed codebarre.
-     */
+
     @Query(value = """
             SELECT t.reference        AS "reference",
                    t.codebarre        AS "codebarre",
@@ -95,8 +75,7 @@ public interface BilletRepository extends JpaRepository<Billet, String> {
             """, nativeQuery = true)
     List<AccessLogProjection> findPublicAccessLog(@Param("numeroserie") String numeroserie);
 
-    /** DETAILS (lazy) — VIP access log for a billet (vipaccess.billet, indexed). */
-    @Query(value = """
+     @Query(value = """
             SELECT t.reference        AS "reference",
                    t.codebarre        AS "codebarre",
                    t.datetransaction  AS "datetransaction",
@@ -110,10 +89,7 @@ public interface BilletRepository extends JpaRepository<Billet, String> {
             """, nativeQuery = true)
     List<AccessLogProjection> findVipAccessLog(@Param("numeroserie") String numeroserie);
 
-    /**
-     * Change C — every billet whose numeroserie falls in [start, end], with its
-     * model/event and any existing assigned name. Read-only.
-     */
+
     @Query(value = """
             SELECT b.numeroserie  AS "numeroserie",
                    b.codebarre    AS "codebarre",

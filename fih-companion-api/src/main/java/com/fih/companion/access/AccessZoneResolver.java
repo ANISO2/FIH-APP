@@ -5,11 +5,7 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Turns a modelebillet reference into human-readable access zones, using the
- * configured code map. Codes: P=Public, V=Vip, R=Press. This is the single
- * source of zone truth — the legacy "access" blob is never deserialized.
- */
+
 @Component
 public class AccessZoneResolver {
 

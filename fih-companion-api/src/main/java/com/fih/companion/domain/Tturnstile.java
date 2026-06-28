@@ -7,7 +7,7 @@ import org.hibernate.annotations.Immutable;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
-/** Turnstile transaction log. Read-only mapping of "tturnstile". */
+/**   Read-only mapping of "tturnstile". */
 @Entity
 @Table(name = "tturnstile")
 @Immutable

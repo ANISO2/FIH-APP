@@ -23,20 +23,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.LocalDate;
 import java.util.*;
 
-/**
- * Read-only data side of the badge feature: counts, item lists, poster coverage.
- *
- * INVITATION-ONLY — generation is restricted to invitation models
- * (fih.badge.invitation-models via {@link BadgeProperties}).
- *
- * POSTER COVERAGE (Change A) — there is no per-ticket photo any more. Coverage is
- * per EVENT: does the event have its own poster (slug(eventTitle).{ext})?
- * {@link PosterResolver} answers that exactly the way {@link BadgePdfService}
- * finds the poster it prints, so the indicator matches reality.
- *
- * The PDF renderer resolves its own poster from the event title, so the
- * BadgeRecord no longer carries a per-ticket image (photo = null).
- */
+
 @Service
 @Transactional(readOnly = true)
 public class BadgeQueryService {
@@ -75,8 +62,7 @@ public class BadgeQueryService {
                 .filter(r -> props.isInvitationModel(r.getModelId()))
                 .toList();
 
-        // Change A — per-event poster check, cached so we hit the disk once per title.
-        Map<String, Boolean> posterCache = new HashMap<>();
+         Map<String, Boolean> posterCache = new HashMap<>();
 
         List<AvailabilityDto> out = new ArrayList<>(rows.size());
         for (AvailabilityProjection r : rows) {
@@ -91,9 +77,8 @@ public class BadgeQueryService {
         return out;
     }
 
-    // ------------------------------------------------------------- missing posters (§6)
-    /** Events that have invitations but no event-specific poster on disk yet. */
-    public List<MissingPosterDto> missingPosters() {
+    // ------------------------------------------------------------- missing posters
+     public List<MissingPosterDto> missingPosters() {
         Map<Integer, MissingPosterDto> byEvent = new LinkedHashMap<>();
         for (AvailabilityProjection r : badgeRepo.availability(null)) {
             if (!props.isInvitationModel(r.getModelId())) continue;
@@ -155,8 +140,7 @@ public class BadgeQueryService {
             if (wanted != null && !wanted.contains(p.getCodebarre()) && !wanted.contains(p.getNumeroserie())) {
                 continue;
             }
-            // photo = null: the PDF resolves the event poster itself from the title.
-            out.add(new BadgeRecord(p.getType(), p.getNumeroserie(), p.getCodebarre(), p.getHolderName(),
+             out.add(new BadgeRecord(p.getType(), p.getNumeroserie(), p.getCodebarre(), p.getHolderName(),
                     p.getAffecteeA(),
                     e.getTitre(), e.getDdate(), m == null ? null : m.getModele(), zoneList, null));
         }
@@ -175,8 +159,7 @@ public class BadgeQueryService {
                 m == null ? null : m.getModele(), zones.resolve(modelId), null);
     }
 
-    /** The assigned "Affectée à" name for a serial, or null if none set. */
-    private String affecteeName(String numeroserie) {
+     private String affecteeName(String numeroserie) {
         return affectationRepo.findById(numeroserie).map(BadgeAffectation::getAffecteeA).orElse(null);
     }
 
@@ -186,8 +169,7 @@ public class BadgeQueryService {
         return full.isEmpty() ? null : full;
     }
 
-    /** Guard: reject any model that is not a configured invitation model. */
-    private void requireInvitation(Integer modelId) {
+     private void requireInvitation(Integer modelId) {
         if (!props.isInvitationModel(modelId)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND,
                     "Badge generation is restricted to invitation models");

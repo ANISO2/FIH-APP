@@ -16,20 +16,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Badge endpoints. All under /api/badges/** which SecurityConfig locks to the
- * admin JWT. PDFs/ZIPs are returned as byte[] with a Content-Disposition header
- * so the browser downloads them with a sensible filename.
- *
- * GENERATION GUARD (Change D) — a PDF can only be produced for an invitation that
- * has been affected to a name. {@link #single} returns 422 for an unaffected
- * serial; {@link #batch} prints the affected ones and reports the skipped serials
- * back in the X-Skipped-* response headers (or 422 if NONE are affected).
- *
- * §6 — after a PDF is produced we stamp printed_at on the serials involved (via
- * {@link AffecteeService#markPrinted}). Only serials that already have a name are
- * stamped; printing never creates a name, so the one-time rule is untouched.
- */
+
 @RestController
 @RequestMapping("/api/badges")
 public class BadgeController {
@@ -49,8 +36,7 @@ public class BadgeController {
         return query.availability(eventId);
     }
 
-    /** §6 — events that have invitations but no poster file yet. */
-    @GetMapping("/posters/missing")
+     @GetMapping("/posters/missing")
     public List<MissingPosterDto> missingPosters() {
         return query.missingPosters();
     }
@@ -87,8 +73,7 @@ public class BadgeController {
         }
         List<BadgeRecord> all = query.batch(req.eventId(), req.modelId(), req.codes());
 
-        // Change D — print only the affected invitations; remember the rest so the
-        // UI can tell the admin which serials still need a name.
+
         List<BadgeRecord> printable = new ArrayList<>();
         List<String> skipped = new ArrayList<>();
         for (BadgeRecord r : all) {
@@ -116,17 +101,10 @@ public class BadgeController {
         return response;
     }
 
-    /** True when the invitation has no "Affectée à" name (Change D). */
-    private boolean isUnaffected(BadgeRecord rec) {
+     private boolean isUnaffected(BadgeRecord rec) {
         return rec.affecteeA() == null || rec.affecteeA().isBlank();
     }
 
-    /**
-     * Build the download response. When {@code skipped} is non-empty (batch only)
-     * we add X-Skipped-Count and X-Skipped-Serials so the front-end can show which
-     * unaffected invitations were left out. The list is capped to keep the header
-     * small.
-     */
     private ResponseEntity<byte[]> pdfResponse(byte[] body, String filename, MediaType type, List<String> skipped) {
         ResponseEntity.BodyBuilder b = ResponseEntity.ok()
                 .contentType(type)
