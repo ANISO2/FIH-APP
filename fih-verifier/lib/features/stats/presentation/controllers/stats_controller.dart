@@ -6,6 +6,27 @@ import '../../../../core/network/api_exception.dart';
 import '../../data/stats_repository.dart';
 import '../../domain/stats_models.dart';
 
+/// Today's numbers, derived from the per-day entries feed.
+class TodayStats {
+  final DateTime day;   // the day actually shown
+  final bool isToday;   // false when we fell back to the latest active day
+  final int entries;    // accepted passages
+  final int rejected;
+  final int total;      // all scans that day
+  final double rate;    // acceptance %, 0..100
+  final List<EntryByDay> trend; // up to the last 7 active days (incl. `day`)
+
+  const TodayStats({
+    required this.day,
+    required this.isToday,
+    required this.entries,
+    required this.rejected,
+    required this.total,
+    required this.rate,
+    required this.trend,
+  });
+}
+
 sealed class StatsUiState {
   const StatsUiState();
 }
@@ -15,8 +36,8 @@ class StatsLoading extends StatsUiState {
 }
 
 class StatsLoaded extends StatsUiState {
-  final StatsDashboard data;
-  const StatsLoaded(this.data);
+  final TodayStats today;
+  const StatsLoaded(this.today);
 }
 
 class StatsFailed extends StatsUiState {
@@ -24,61 +45,52 @@ class StatsFailed extends StatsUiState {
   const StatsFailed(this.message);
 }
 
-/// Drives the dashboard.
+/// Drives the TODAY dashboard.
 ///
-/// - Auto-refresh is OFF by default; the user turns it on with a switch. When
-///   on, it polls every [pollInterval] (30 s) — granular enough for a gate that
-///   sees 10k+ scans in half an hour, light enough to ride the server cache.
-/// - Polls are non-overlapping (`_inFlight`) and OFFLINE-TOLERANT: a failed
-///   refresh keeps the last good data on screen and just raises [offlineHint],
-///   instead of throwing the dashboard away.
+/// - LIVE by default: polls every [pollInterval] so the numbers update on their
+///   own while the gates are open.
+/// - FREEZE button: [setLive(false)] stops the polling and holds the current
+///   snapshot on screen (it stays frozen until you resume or restart the app).
+///   [setLive(true)] resumes the live feed.
+/// - Polls are non-overlapping and offline-tolerant: a failed poll keeps the
+///   last snapshot and just raises [offlineHint].
 class StatsController extends ChangeNotifier {
   final StatsRepository _repo;
   StatsController(this._repo);
 
-  static const Duration pollInterval = Duration(seconds: 30);
+  static const Duration pollInterval = Duration(seconds: 15);
 
   StatsUiState _state = const StatsLoading();
   StatsUiState get state => _state;
 
-  List<int> years = const [];
-  int? year; // null = "Toutes les années"
-  bool autoRefresh = false;
-  bool offlineHint = false; // last refresh failed but we kept cached data
+  bool live = true; // live updating ON by default
+  bool offlineHint = false;
   DateTime? lastUpdated;
 
   bool _inFlight = false;
   Timer? _timer;
 
   Future<void> init() async {
-    try {
-      years = await _repo.years();
-      if (years.isNotEmpty) year = years.first; // default to the most recent year
-    } catch (_) {
-      // Year list is non-critical; the dashboard still works for "all years".
-    }
     await refresh();
+    if (live) _startTimer();
   }
 
-  Future<void> setYear(int? value) async {
-    if (value == year) return;
-    year = value;
-    _state = const StatsLoading();
-    notifyListeners();
-    await refresh();
+  void _startTimer() {
+    _timer?.cancel();
+    _timer = Timer.periodic(pollInterval, (_) => refresh());
   }
 
   Future<void> refresh() async {
     if (_inFlight) return;
     _inFlight = true;
     try {
-      final data = await _repo.dashboard(year);
-      _state = StatsLoaded(data);
+      final days = await _repo.entriesByDay(null);
+      _state = StatsLoaded(_buildToday(days));
       lastUpdated = DateTime.now();
       offlineHint = false;
     } on ApiException catch (e) {
       if (_state is StatsLoaded) {
-        offlineHint = true; // keep showing the last snapshot
+        offlineHint = true;
       } else {
         _state = StatsFailed(e.frenchHint);
       }
@@ -94,14 +106,60 @@ class StatsController extends ChangeNotifier {
     }
   }
 
-  void setAutoRefresh(bool on) {
-    autoRefresh = on;
-    _timer?.cancel();
-    _timer = null;
+  /// Freeze (false) / resume live (true).
+  void setLive(bool on) {
+    live = on;
     if (on) {
-      _timer = Timer.periodic(pollInterval, (_) => refresh());
+      _startTimer();
+      refresh();
+    } else {
+      _timer?.cancel();
+      _timer = null;
     }
     notifyListeners();
+  }
+
+  TodayStats _buildToday(List<EntryByDay> days) {
+    final now = DateTime.now();
+    bool isSameDay(DateTime d) => d.year == now.year && d.month == now.month && d.day == now.day;
+
+    final sorted = days.where((d) => d.date != null).toList()
+      ..sort((a, b) => a.date!.compareTo(b.date!));
+
+    EntryByDay? todayRow;
+    for (final d in sorted) {
+      if (isSameDay(d.date!)) {
+        todayRow = d;
+        break;
+      }
+    }
+
+    final chosen = todayRow ?? (sorted.isNotEmpty ? sorted.last : null);
+    final trend = sorted.length <= 7 ? sorted : sorted.sublist(sorted.length - 7);
+
+    if (chosen == null) {
+      return TodayStats(
+        day: DateTime(now.year, now.month, now.day),
+        isToday: true,
+        entries: 0,
+        rejected: 0,
+        total: 0,
+        rate: 0,
+        trend: const [],
+      );
+    }
+
+    final total = chosen.scans;
+    final rate = total == 0 ? 0.0 : (chosen.accepted / total) * 100.0;
+    return TodayStats(
+      day: chosen.date!,
+      isToday: todayRow != null,
+      entries: chosen.accepted,
+      rejected: chosen.rejected,
+      total: total,
+      rate: rate,
+      trend: trend,
+    );
   }
 
   @override

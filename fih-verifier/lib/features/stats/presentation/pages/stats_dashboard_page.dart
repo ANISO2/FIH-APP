@@ -8,10 +8,9 @@ import '../../data/stats_repository.dart';
 import '../../domain/stats_models.dart';
 import '../controllers/stats_controller.dart';
 
-/// GLOBAL live dashboard for the verifier. Shows how many people entered,
-/// acceptance rate, Public/VIP split, ticket types, and entries per day — no
-/// money / recette (those stay in the backoffice). Auto-refresh is OFF until
-/// the operator turns it on.
+/// TODAY dashboard — how many people entered today, live. No global totals,
+/// no money. Live by default; the "Geler" button freezes the snapshot until
+/// you resume or restart the app.
 class StatsDashboardPage extends StatefulWidget {
   const StatsDashboardPage({super.key});
 
@@ -23,6 +22,7 @@ class _StatsDashboardPageState extends State<StatsDashboardPage> {
   late final StatsController _c;
   static final NumberFormat _nf = NumberFormat.decimalPattern('fr_FR');
   static final DateFormat _hms = DateFormat('HH:mm:ss', 'fr_FR');
+  static final DateFormat _long = DateFormat('EEEE d MMMM yyyy', 'fr_FR');
   static final DateFormat _dm = DateFormat('dd/MM', 'fr_FR');
 
   String _n(int v) => _nf.format(v);
@@ -44,7 +44,7 @@ class _StatsDashboardPageState extends State<StatsDashboardPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Statistiques'),
+        title: const Text("Aujourd'hui"),
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         actions: [
@@ -61,12 +61,11 @@ class _StatsDashboardPageState extends State<StatsDashboardPage> {
       body: ListenableBuilder(
         listenable: _c,
         builder: (context, _) {
-          final state = _c.state;
           return Column(
             children: [
               _controlBar(),
               const Divider(height: 1),
-              Expanded(child: _bodyFor(state)),
+              Expanded(child: _bodyFor(_c.state)),
             ],
           );
         },
@@ -76,61 +75,37 @@ class _StatsDashboardPageState extends State<StatsDashboardPage> {
 
   // ----------------------------------------------------------- control bar
   Widget _controlBar() {
+    final live = _c.live;
+    final Color dot = live
+        ? (_c.offlineHint ? AppColors.verdictWarn : AppColors.verdictValid)
+        : const Color(0xFF9AA7B2);
+    final String label = !live
+        ? 'GELÉ'
+        : (_c.offlineHint ? 'HORS LIGNE' : 'EN DIRECT');
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: Gap.md, vertical: Gap.sm),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Row(
-            children: [
-              const Icon(Icons.event_rounded, size: 18, color: AppColors.primary),
-              const SizedBox(width: 6),
-              _yearDropdown(),
-              const Spacer(),
-              const Text('Auto 30 s', style: TextStyle(fontSize: 13)),
-              Switch(
-                value: _c.autoRefresh,
-                onChanged: _c.setAutoRefresh,
-                activeColor: AppColors.primary,
-              ),
-            ],
-          ),
-          Row(
-            children: [
-              Icon(
-                _c.offlineHint ? Icons.cloud_off_rounded : Icons.schedule_rounded,
-                size: 14,
-                color: _c.offlineHint ? AppColors.verdictWarn : Colors.black.withValues(alpha: 0.45),
-              ),
-              const SizedBox(width: 6),
-              Text(
-                _c.lastUpdated == null
-                    ? '—'
-                    : (_c.offlineHint
-                        ? 'Hors ligne — données de ${_hms.format(_c.lastUpdated!)}'
-                        : 'Mis à jour à ${_hms.format(_c.lastUpdated!)}'),
-                style: TextStyle(
-                  fontSize: 12,
-                  color: _c.offlineHint ? AppColors.verdictWarn : Colors.black.withValues(alpha: 0.55),
-                ),
-              ),
-            ],
+          Container(width: 10, height: 10, decoration: BoxDecoration(color: dot, shape: BoxShape.circle)),
+          const SizedBox(width: 6),
+          Text(label, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: dot)),
+          const SizedBox(width: 10),
+          if (_c.lastUpdated != null)
+            Text('• ${_hms.format(_c.lastUpdated!)}',
+                style: TextStyle(fontSize: 12, color: Colors.black.withValues(alpha: 0.5))),
+          const Spacer(),
+          // The freeze / resume button.
+          OutlinedButton.icon(
+            onPressed: () => _c.setLive(!live),
+            icon: Icon(live ? Icons.pause_rounded : Icons.play_arrow_rounded, size: 18),
+            label: Text(live ? 'Geler' : 'Direct'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: live ? AppColors.verdictStop : AppColors.verdictValid,
+              side: BorderSide(color: live ? AppColors.verdictStop : AppColors.verdictValid),
+              visualDensity: VisualDensity.compact,
+            ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _yearDropdown() {
-    return DropdownButtonHideUnderline(
-      child: DropdownButton<int?>(
-        value: _c.year,
-        isDense: true,
-        items: <DropdownMenuItem<int?>>[
-          const DropdownMenuItem<int?>(value: null, child: Text('Toutes les années')),
-          ..._c.years.map((y) => DropdownMenuItem<int?>(value: y, child: Text('$y'))),
-        ],
-        onChanged: (v) => _c.setYear(v),
       ),
     );
   }
@@ -142,8 +117,8 @@ class _StatsDashboardPageState extends State<StatsDashboardPage> {
         return const Center(child: CircularProgressIndicator());
       case StatsFailed(message: final m):
         return _errorView(m);
-      case StatsLoaded(data: final d):
-        return _dashboard(d);
+      case StatsLoaded(today: final t):
+        return _dashboard(t);
     }
   }
 
@@ -168,98 +143,67 @@ class _StatsDashboardPageState extends State<StatsDashboardPage> {
         ),
       );
 
-  Widget _dashboard(StatsDashboard d) {
-    final o = d.overview;
+  Widget _dashboard(TodayStats t) {
     return ListView(
       padding: const EdgeInsets.all(Gap.md),
       children: [
-        // Headline: entries + acceptance rate.
+        if (!t.isToday)
+          Container(
+            width: double.infinity,
+            margin: const EdgeInsets.only(bottom: Gap.md),
+            padding: const EdgeInsets.all(Gap.sm),
+            decoration: BoxDecoration(
+              color: AppColors.verdictWarn.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.info_outline_rounded, size: 18, color: AppColors.verdictWarn),
+                const SizedBox(width: Gap.sm),
+                Expanded(
+                  child: Text(
+                    "Aucune entrée aujourd'hui — dernier jour d'activité : ${_dm.format(t.day)}",
+                    style: const TextStyle(fontSize: 13, color: AppColors.verdictWarn),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+        // Headline — entries.
         Container(
           width: double.infinity,
           padding: const EdgeInsets.all(Gap.md),
-          decoration: BoxDecoration(
-            color: AppColors.primary,
-            borderRadius: BorderRadius.circular(16),
-          ),
+          decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(16)),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Entrées (accès accordés)',
-                  style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600)),
+              Text(t.isToday ? "Entrées aujourd'hui" : 'Entrées (${_dm.format(t.day)})',
+                  style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600)),
               const SizedBox(height: 4),
-              Text(_n(o.acceptedScans),
-                  style: const TextStyle(color: Colors.white, fontSize: 40, fontWeight: FontWeight.w800)),
-              const SizedBox(height: 4),
-              Text("Taux d'acceptation : ${o.acceptanceRate.toStringAsFixed(1)} %  ·  ${_n(o.totalScans)} scans",
-                  style: const TextStyle(color: Colors.white70, fontSize: 13)),
+              Text(_n(t.entries),
+                  style: const TextStyle(color: Colors.white, fontSize: 44, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 2),
+              Text(_long.format(t.day),
+                  style: const TextStyle(color: Colors.white70, fontSize: 12)),
             ],
           ),
         ),
         const SizedBox(height: Gap.md),
 
-        // KPI grid.
-        GridView.count(
-          crossAxisCount: 2,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          mainAxisSpacing: Gap.sm,
-          crossAxisSpacing: Gap.sm,
-          childAspectRatio: 1.9,
+        // KPI row.
+        Row(
           children: [
-            _kpi('Refusés', _n(o.rejectedScans), Icons.block_rounded, AppColors.verdictStop),
-            _kpi('Entrées Public', _n(o.publicScans), Icons.groups_rounded, AppColors.primary),
-            _kpi('Entrées VIP', _n(o.vipScans), Icons.star_rounded, AppColors.accent),
-            _kpi('Événements', _n(o.totalEvents), Icons.event_rounded, AppColors.primary),
-            _kpi('Billets', _n(o.totalBillets), Icons.confirmation_number_rounded, AppColors.primary),
-            _kpi('Vouchers', _n(o.totalVouchers), Icons.local_activity_rounded, AppColors.accent),
+            Expanded(child: _kpi('Refusés', _n(t.rejected), Icons.block_rounded, AppColors.verdictStop)),
+            const SizedBox(width: Gap.sm),
+            Expanded(child: _kpi('Total scans', _n(t.total), Icons.qr_code_rounded, AppColors.primary)),
+            const SizedBox(width: Gap.sm),
+            Expanded(child: _kpi('Taux', '${t.rate.toStringAsFixed(1)} %', Icons.verified_rounded, AppColors.verdictValid)),
           ],
         ),
 
-        if (o.busiestEventTitle != null) ...[
-          const SizedBox(height: Gap.md),
-          _card(
-            child: Row(
-              children: [
-                const Icon(Icons.local_fire_department_rounded, color: AppColors.verdictWarn),
-                const SizedBox(width: Gap.sm),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('Spectacle le plus fréquenté',
-                          style: TextStyle(fontSize: 12, color: Colors.black54)),
-                      Text(o.busiestEventTitle!,
-                          style: const TextStyle(fontWeight: FontWeight.w700)),
-                    ],
-                  ),
-                ),
-                Text('${_n(o.busiestEventScans)} entrées',
-                    style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.primary)),
-              ],
-            ),
-          ),
-        ],
-
         const SizedBox(height: Gap.md),
-        _section('Entrées par jour', _dayBars(d.entriesByDay)),
-
-        const SizedBox(height: Gap.md),
-        _section('Par porte', Column(
-          children: [
-            _gateRow('Public', d.gate.publicGate),
-            const SizedBox(height: Gap.sm),
-            _gateRow('VIP', d.gate.vip),
-          ],
-        )),
-
-        const SizedBox(height: Gap.md),
-        _section('Par type', Column(
-          children: [
-            _typeRow('Billets', d.ticketTypes.billet),
-            const SizedBox(height: Gap.sm),
-            _typeRow('Vouchers', d.ticketTypes.voucher),
-          ],
-        )),
+        _section('Tendance (derniers jours)', _trendBars(t.trend)),
 
         const SizedBox(height: Gap.xl),
       ],
@@ -267,14 +211,10 @@ class _StatsDashboardPageState extends State<StatsDashboardPage> {
   }
 
   // --------------------------------------------------------------- widgets
-  Widget _card({required Widget child}) => Container(
+  Widget _section(String title, Widget child) => Container(
         width: double.infinity,
         padding: const EdgeInsets.all(Gap.md),
         decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
-        child: child,
-      );
-
-  Widget _section(String title, Widget child) => _card(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -290,100 +230,26 @@ class _StatsDashboardPageState extends State<StatsDashboardPage> {
   Widget _kpi(String label, String value, IconData icon, Color color) => Container(
         padding: const EdgeInsets.all(Gap.sm),
         decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14)),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(color: color.withValues(alpha: 0.12), shape: BoxShape.circle),
-              child: Icon(icon, color: color, size: 20),
-            ),
-            const SizedBox(width: Gap.sm),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(value,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
-                  Text(label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 12, color: Colors.black.withValues(alpha: 0.55))),
-                ],
-              ),
-            ),
+            Icon(icon, color: color, size: 20),
+            const SizedBox(height: 6),
+            Text(value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
+            Text(label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 12, color: Colors.black.withValues(alpha: 0.55))),
           ],
         ),
       );
 
-  Widget _gateRow(String label, GateBucket b) {
-    final total = b.scans == 0 ? 1 : b.scans;
-    final accFrac = b.accepted / total;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
-            const Spacer(),
-            Text('${_n(b.accepted)} ✓   ${_n(b.rejected)} ✗',
-                style: TextStyle(fontSize: 13, color: Colors.black.withValues(alpha: 0.6))),
-          ],
-        ),
-        const SizedBox(height: 4),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(6),
-          child: Row(
-            children: [
-              Expanded(
-                flex: (accFrac * 1000).round().clamp(0, 1000).toInt(),
-                child: Container(height: 8, color: AppColors.verdictValid),
-              ),
-              Expanded(
-                flex: (1000 - (accFrac * 1000).round()).clamp(0, 1000).toInt(),
-                child: Container(height: 8, color: AppColors.verdictStop.withValues(alpha: 0.85)),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _typeRow(String label, TicketBucket b) {
-    final double frac = b.issued == 0 ? 0.0 : (b.scanned / b.issued).clamp(0.0, 1.0).toDouble();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
-            const Spacer(),
-            Text('${_n(b.scanned)} scannés / ${_n(b.issued)} émis',
-                style: TextStyle(fontSize: 13, color: Colors.black.withValues(alpha: 0.6))),
-          ],
-        ),
-        const SizedBox(height: 4),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(6),
-          child: LinearProgressIndicator(
-            value: frac,
-            minHeight: 8,
-            backgroundColor: AppColors.primary.withValues(alpha: 0.12),
-            valueColor: const AlwaysStoppedAnimation(AppColors.primary),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _dayBars(List<EntryByDay> days) {
+  Widget _trendBars(List<EntryByDay> days) {
     if (days.isEmpty) {
-      return Text('Aucune entrée enregistrée.',
-          style: TextStyle(color: Colors.black.withValues(alpha: 0.5)));
+      return Text('Aucune donnée.', style: TextStyle(color: Colors.black.withValues(alpha: 0.5)));
     }
     final maxV = days.map((d) => d.scans).fold<int>(1, (a, b) => b > a ? b : a);
     const barArea = 110.0;
@@ -391,7 +257,7 @@ class _StatsDashboardPageState extends State<StatsDashboardPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SizedBox(
-          height: barArea + 26,
+          height: barArea + 36,
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
@@ -400,24 +266,25 @@ class _StatsDashboardPageState extends State<StatsDashboardPage> {
                 final acc = (d.accepted / maxV) * barArea;
                 final rej = (d.rejected / maxV) * barArea;
                 return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 5),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
+                      Text(_n(d.accepted), style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 2),
                       SizedBox(
                         height: barArea,
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.end,
                           children: [
                             if (rej > 0)
-                              Container(width: 16, height: rej.clamp(2, barArea).toDouble(), color: AppColors.verdictStop.withValues(alpha: 0.85)),
-                            Container(width: 16, height: acc.clamp(2, barArea).toDouble(), color: AppColors.primary),
+                              Container(width: 20, height: rej.clamp(2, barArea).toDouble(), color: AppColors.verdictStop.withValues(alpha: 0.85)),
+                            Container(width: 20, height: acc.clamp(2, barArea).toDouble(), color: AppColors.primary),
                           ],
                         ),
                       ),
                       const SizedBox(height: 4),
-                      Text(d.date == null ? '—' : _dm.format(d.date!),
-                          style: const TextStyle(fontSize: 10)),
+                      Text(d.date == null ? '—' : _dm.format(d.date!), style: const TextStyle(fontSize: 10)),
                     ],
                   ),
                 );
