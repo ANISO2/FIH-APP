@@ -5,7 +5,7 @@ import { BadgeService } from '../core/badge.service';
 import { Availability, MissingPoster } from '../core/models';
 import { LoadingSkeletonComponent } from '../shared/loading-skeleton.component';
 import { EmptyStateComponent } from '../shared/empty-state.component';
-import { NumPipe, FDatePipe } from '../shared/format';
+import { NumPipe, FDatePipe, realDate } from '../shared/format';
 
 interface EventGroup {
   eventId: number; eventTitle: string; eventDate: string; hasPoster: boolean; rows: Availability[];
@@ -173,7 +173,10 @@ export class BadgesComponent implements OnInit {
     this.loading.set(true);
     this.error.set(false);
     this.badges.availability().subscribe({
-      next: (r) => { this.rows.set(r); this.loading.set(false); },
+      // Hide events with no real date (stored as the 1970-01-01 epoch) — e.g. the
+      // legacy "FIH" placeholder event. The records stay in the DB; they're just
+      // not surfaced here until the event has a proper date.
+      next: (r) => { this.rows.set(r.filter(x => realDate(x.eventDate) !== null)); this.loading.set(false); },
       error: () => { this.error.set(true); this.loading.set(false); }
     });
     this.badges.missingPosters().subscribe({

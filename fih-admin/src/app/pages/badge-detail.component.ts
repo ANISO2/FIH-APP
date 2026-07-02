@@ -1,14 +1,14 @@
-import { Component, Input, OnInit, signal } from '@angular/core';
+import { Component, Input, OnInit, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { BadgeService } from '../core/badge.service';
-import { Availability, BadgeItem, Page, LotPreview } from '../core/models';
+import { Availability, BadgeItem, Page, LotPreview, BadgeCounts, BadgeStatus } from '../core/models';
 import { LoadingSkeletonComponent } from '../shared/loading-skeleton.component';
 import { EmptyStateComponent } from '../shared/empty-state.component';
 import { NumPipe, FDatePipe } from '../shared/format';
 
 const CONFIRM_SINGLE =
-  "Attention : cette affectation est définitive. L'invitation sera considérée comme délivrée et " +
+  "Attention : cette affectation est définitive. L'entrée sera considérée comme délivrée et " +
   "affectée une seule fois — vous ne pourrez plus la modifier. Confirmer ?";
 
 @Component({
@@ -17,7 +17,7 @@ const CONFIRM_SINGLE =
   imports: [FormsModule, LoadingSkeletonComponent, EmptyStateComponent, NumPipe, FDatePipe],
   template: `
     <button (click)="back()" class="flex items-center gap-1 text-sm text-muted hover:text-ink mb-4 transition-colors">
-      <span class="msr text-[18px]">arrow_back</span> Retour aux badges
+      <span class="msr text-[18px]">arrow_back</span> Retour aux invitations & badges
     </button>
 
     @if (errorMsg()) {
@@ -34,17 +34,35 @@ const CONFIRM_SINGLE =
 
     @if (header(); as h) {
       <div class="surface-card p-6 mb-4">
-        <h2 class="text-2xl font-bold text-ink">{{ h.eventTitle }}</h2>
-        <p class="text-muted">{{ h.eventDate | fdate }} · {{ h.modelName }}</p>
+        <div class="flex items-start justify-between gap-4">
+          <div>
+            <h2 class="text-2xl font-bold text-ink">{{ h.eventTitle }}</h2>
+            <p class="text-muted">{{ h.eventDate | fdate }} · {{ h.modelName }}</p>
+          </div>
+          <!-- Feature 3 — clear badge telling the operator whether this type prints. -->
+          @if (h.printable) {
+            <span class="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full"
+                  style="background:rgba(10,124,74,.12);color:var(--success)">
+              <span class="msr text-[16px]">print</span> Type imprimable
+            </span>
+          } @else {
+            <span class="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full"
+                  style="background:var(--bg);color:var(--muted)" title="Ce type ne s'imprime pas : affectation uniquement">
+              <span class="msr text-[16px]">how_to_reg</span> Affectation uniquement
+            </span>
+          }
+        </div>
         <div class="flex flex-wrap gap-2 mt-4 items-center">
           @for (z of h.accessZones; track z) {
             <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full text-white" [style.background]="zoneColor(z)">{{ z }}</span>
           }
           <span class="chip">{{ h.injectedCount | num }} injectés</span>
-          @if (h.eventHasPoster) {
-            <span class="chip" style="color:var(--success)">Affiche présente</span>
-          } @else {
-            <span class="chip" style="color:var(--warn)">Affiche manquante ({{ h.eventId }}.jpg)</span>
+          @if (h.printable) {
+            @if (h.eventHasPoster) {
+              <span class="chip" style="color:var(--success)">Affiche présente</span>
+            } @else {
+              <span class="chip" style="color:var(--warn)">Affiche manquante ({{ h.eventId }}.jpg)</span>
+            }
           }
         </div>
       </div>
@@ -86,12 +104,12 @@ const CONFIRM_SINGLE =
       @if (preview(); as p) {
         <div class="mt-4 border-t border-line pt-4">
           <div class="flex flex-wrap gap-2 mb-3">
-            <span class="chip"><b>{{ p.eligibleCount | num }}</b>&nbsp;invitation(s) éligible(s)</span>
+            <span class="chip"><b>{{ p.eligibleCount | num }}</b>&nbsp;entrée(s) éligible(s)</span>
             @if (p.alreadyAssignedCount > 0) {
               <span class="chip" style="color:var(--warn)">{{ p.alreadyAssignedCount }} déjà affectée(s)</span>
             }
             @if (p.nonInvitationCount > 0) {
-              <span class="chip" style="color:var(--warn)">{{ p.nonInvitationCount }} non-invitation(s) ignorée(s)</span>
+              <span class="chip" style="color:var(--warn)">{{ p.nonInvitationCount }} entrée(s) payante(s) ignorée(s)</span>
             }
             @if (p.baseNameAlreadyUsed) {
               <span class="chip">Séquence « {{ lotBase }} » poursuivie</span>
@@ -99,10 +117,10 @@ const CONFIRM_SINGLE =
           </div>
 
           @if (p.eligibleCount === 0) {
-            <div class="text-sm text-muted">Aucune invitation dans cette plage.</div>
+            <div class="text-sm text-muted">Aucune entrée affectable dans cette plage.</div>
           } @else if (!p.canAssign) {
             <div class="text-sm px-3 py-2 rounded-lg mb-3" style="background:#fbeae0;color:var(--warn)">
-              Lot bloqué : certaines invitations de la plage sont déjà affectées
+              Lot bloqué : certaines entrées de la plage sont déjà affectées
               ({{ p.alreadyAssignedSerials.join(', ') }}). Ajustez la plage.
             </div>
           }
@@ -146,11 +164,14 @@ const CONFIRM_SINGLE =
                 @if (lotAssigning()) { <span class="msr text-[16px] animate-spin align-middle">progress_activity</span> }
                 Confirmer l'affectation ({{ p.eligibleCount }})
               </button>
-              @if (assignedDone()) {
+              <!-- Feature 3 — PDF generation only for printable types. -->
+              @if (assignedDone() && printable()) {
                 <button (click)="generateLot()" [disabled]="generating()"
                         class="px-3 py-2 rounded-lg text-sm font-medium border border-line bg-white hover:bg-bg disabled:opacity-50">
                   Générer les PDF du lot
                 </button>
+              }
+              @if (assignedDone()) {
                 <button (click)="downloadManifest()"
                         class="px-3 py-2 rounded-lg text-sm font-medium border border-line bg-white hover:bg-bg">
                   Manifeste CSV
@@ -162,6 +183,64 @@ const CONFIRM_SINGLE =
       }
     </div>
 
+    <!-- ============== Feature 2 — compteur + filtre ============== -->
+    <div class="surface-card p-5 mb-4">
+      <div class="flex flex-wrap items-center justify-between gap-6">
+        <!-- Compteur : « X affectées / Y restantes » -->
+        @if (counts(); as c) {
+          <div class="flex items-center gap-5">
+            <div>
+              <div class="text-[11px] font-semibold uppercase tracking-wide text-muted">Affectées</div>
+              <div class="text-2xl font-extrabold" style="color:var(--success)">{{ c.affected | num }}</div>
+            </div>
+            <div class="w-px h-9 bg-line"></div>
+            <div>
+              <div class="text-[11px] font-semibold uppercase tracking-wide text-muted">Restantes</div>
+              <div class="text-2xl font-extrabold text-primary">{{ c.pending | num }}</div>
+            </div>
+            <div class="w-px h-9 bg-line"></div>
+            <div>
+              <div class="text-[11px] font-semibold uppercase tracking-wide text-muted">Total</div>
+              <div class="text-2xl font-extrabold text-ink">{{ c.total | num }}</div>
+            </div>
+          </div>
+          <div class="flex-1 min-w-[180px] max-w-xs">
+            <div class="flex justify-between text-xs text-muted mb-1">
+              <span>{{ affectedPct() }} % affectées</span>
+              <span>{{ c.affected | num }} / {{ c.total | num }}</span>
+            </div>
+            <div class="h-2 rounded-full overflow-hidden" style="background:var(--line)">
+              <div class="h-full rounded-full transition-all" [style.width.%]="affectedPct()" style="background:var(--success)"></div>
+            </div>
+          </div>
+        } @else {
+          <div class="text-sm text-muted">Chargement du compteur…</div>
+        }
+      </div>
+
+      <!-- Filtre segmenté : Restantes (défaut) · Affectées · Tout -->
+      <div class="mt-4 inline-flex rounded-xl border border-line overflow-hidden text-sm font-medium">
+        <button (click)="setStatus('pending')"
+                [style.background]="isStatus('pending') ? 'var(--primary)' : 'white'"
+                [style.color]="isStatus('pending') ? 'white' : 'var(--ink)'"
+                class="px-4 py-2 flex items-center gap-1.5 transition-colors">
+          <span class="msr text-[17px]">hourglass_empty</span> Restantes
+        </button>
+        <button (click)="setStatus('affected')"
+                [style.background]="isStatus('affected') ? 'var(--primary)' : 'white'"
+                [style.color]="isStatus('affected') ? 'white' : 'var(--ink)'"
+                class="px-4 py-2 flex items-center gap-1.5 border-l border-line transition-colors">
+          <span class="msr text-[17px]">how_to_reg</span> Voir les invitations affectées
+        </button>
+        <button (click)="setStatus('all')"
+                [style.background]="isStatus('all') ? 'var(--primary)' : 'white'"
+                [style.color]="isStatus('all') ? 'white' : 'var(--ink)'"
+                class="px-4 py-2 flex items-center gap-1.5 border-l border-line transition-colors">
+          <span class="msr text-[17px]">list</span> Afficher tout
+        </button>
+      </div>
+    </div>
+
     <!-- ============== Barre d'outils ============== -->
     <div class="flex flex-wrap items-center gap-3 mb-4">
       <div class="relative">
@@ -170,14 +249,17 @@ const CONFIRM_SINGLE =
                class="pl-10 pr-3 py-2.5 rounded-xl border border-line bg-white w-64 max-w-full focus:border-accent outline-none" />
       </div>
       <div class="flex-1"></div>
-      <button (click)="generateSelected()" [disabled]="selected.size === 0 || generating()"
-              class="px-3 py-2 rounded-lg text-white text-sm font-medium disabled:opacity-50" style="background:var(--primary)">
-        Générer la sélection ({{ selected.size }})
-      </button>
-      <button (click)="generateAll()" [disabled]="generating()"
-              class="px-3 py-2 rounded-lg text-sm font-medium border border-line bg-white hover:bg-bg disabled:opacity-50">
-        Tout générer
-      </button>
+      <!-- Feature 3 — batch PDF actions only for printable types. -->
+      @if (printable()) {
+        <button (click)="generateSelected()" [disabled]="selected.size === 0 || generating()"
+                class="px-3 py-2 rounded-lg text-white text-sm font-medium disabled:opacity-50" style="background:var(--primary)">
+          Générer la sélection ({{ selected.size }})
+        </button>
+        <button (click)="generateAll()" [disabled]="generating()"
+                class="px-3 py-2 rounded-lg text-sm font-medium border border-line bg-white hover:bg-bg disabled:opacity-50">
+          Tout générer
+        </button>
+      }
     </div>
 
     @if (generating()) {
@@ -191,28 +273,32 @@ const CONFIRM_SINGLE =
     }
     @if (!loading() && page(); as p) {
       @if (p.content.length === 0) {
-      <app-empty-state icon="search_off" title="Aucun enregistrement trouvé" message="Essayez une autre recherche." />
+      <app-empty-state icon="search_off" title="Aucun enregistrement trouvé" [message]="emptyMessage()" />
       } @else {
       <div class="surface-card overflow-hidden">
         <div class="table-scroll">
           <table class="w-full text-sm">
             <thead>
               <tr class="single text-left text-muted">
-                <th class="px-4 py-3 w-10">
-                  <input type="checkbox" [checked]="allOnPageSelected()" (change)="togglePage($event)" />
-                </th>
+                @if (printable()) {
+                  <th class="px-4 py-3 w-10">
+                    <input type="checkbox" [checked]="allOnPageSelected()" (change)="togglePage($event)" />
+                  </th>
+                }
                 <th class="px-4 py-3">N° série</th>
                 <th class="px-4 py-3">Code-barres</th>
                 <th class="px-4 py-3">Titulaire</th>
                 <th class="px-4 py-3">Affectée à</th>
                 <th class="px-4 py-3">Statut</th>
-                <th class="px-4 py-3 text-right">Badge</th>
+                @if (printable()) { <th class="px-4 py-3 text-right">Badge</th> }
               </tr>
             </thead>
             <tbody>
               @for (it of p.content; track it.numeroserie) {
                 <tr class="border-b border-line/60 hover:bg-bg transition-colors">
-                  <td class="px-4 py-3"><input type="checkbox" [checked]="selected.has(it.codebarre)" (change)="toggle(it.codebarre)" /></td>
+                  @if (printable()) {
+                    <td class="px-4 py-3"><input type="checkbox" [checked]="selected.has(it.codebarre)" (change)="toggle(it.codebarre)" /></td>
+                  }
                   <td class="px-4 py-3 font-medium text-ink">{{ it.numeroserie }}</td>
                   <td class="px-4 py-3 text-muted">{{ it.codebarre }}</td>
                   <td class="px-4 py-3">{{ it.holderName || '—' }}</td>
@@ -247,12 +333,14 @@ const CONFIRM_SINGLE =
                       <span class="text-xs text-muted">Libre</span>
                     }
                   </td>
-                  <td class="px-4 py-3 text-right">
-                    <button (click)="generateOne(it)"
-                            [disabled]="generating() || !isAssigned(it)"
-                            [title]="isAssigned(it) ? 'Générer le PDF' : 'Affectez d’abord un nom à cette invitation pour générer son PDF'"
-                            class="px-2.5 py-1 rounded-lg text-sm border border-line hover:bg-bg disabled:opacity-50">PDF</button>
-                  </td>
+                  @if (printable()) {
+                    <td class="px-4 py-3 text-right">
+                      <button (click)="generateOne(it)"
+                              [disabled]="generating() || !isAssigned(it)"
+                              [title]="isAssigned(it) ? 'Générer le PDF' : 'Affectez un nom à cette entrée pour générer son PDF'"
+                              class="px-2.5 py-1 rounded-lg text-sm border border-line hover:bg-bg disabled:opacity-50">PDF</button>
+                    </td>
+                  }
                 </tr>
               }
             </tbody>
@@ -299,7 +387,7 @@ export class BadgeDetailComponent implements OnInit {
   loading = signal(true);
   generating = signal(false);
   errorMsg = signal<string | null>(null);
-  skipMsg = signal<string | null>(null);   // Change D: unaffected invitations skipped during batch
+  skipMsg = signal<string | null>(null);   // Change D: unaffected entries skipped during batch
   header = signal<Availability | null>(null);
   page = signal<Page<BadgeItem> | null>(null);
   search = '';
@@ -311,6 +399,13 @@ export class BadgeDetailComponent implements OnInit {
   assigned = new Set<string>();
   // In-progress text for not-yet-assigned rows, keyed by numeroserie.
   drafts = new Map<string, string>();
+
+  // Feature 2 — assignment status filter (default: only the pending ones) + live counter.
+  status = signal<BadgeStatus>('pending');
+  counts = signal<BadgeCounts | null>(null);
+
+  // Feature 3 — whether this model may be printed (Imprimer). Assign-only when false.
+  printable = computed(() => this.header()?.printable ?? false);
 
   // Lot state (Change C)
   lotStart = '';
@@ -327,7 +422,7 @@ export class BadgeDetailComponent implements OnInit {
   confirmOpen = signal(false);
   confirmText = signal('');
   confirmWarn = signal<string | null>(null);
-  private pending: (() => void) | null = null;
+  private pendingAction: (() => void) | null = null;
 
   constructor(private badges: BadgeService, private router: Router) {}
 
@@ -339,12 +434,42 @@ export class BadgeDetailComponent implements OnInit {
       next: (rows) => this.header.set(rows.find(r => r.modelId === this.mId) ?? null),
       error: () => {}
     });
+    this.loadCounts();
     this.reload(0);
+  }
+
+  // Feature 2 — the "X affectées / Y restantes" counter (search-independent).
+  loadCounts(): void {
+    this.badges.counts(this.eId, this.mId).subscribe({
+      next: (c) => this.counts.set(c),
+      error: () => this.counts.set(null)
+    });
+  }
+  affectedPct(): number {
+    const c = this.counts();
+    if (!c || c.total === 0) return 0;
+    return Math.round((c.affected / c.total) * 100);
+  }
+
+  // Feature 2 — switch the visible set. Selection is cleared to avoid acting on hidden rows.
+  isStatus(s: BadgeStatus): boolean { return this.status() === s; }
+  setStatus(s: BadgeStatus): void {
+    if (this.status() === s) return;
+    this.status.set(s);
+    this.selected.clear();
+    this.reload(0);
+  }
+  emptyMessage(): string {
+    switch (this.status()) {
+      case 'pending':  return 'Toutes les entrées de ce type ont déjà été affectées.';
+      case 'affected': return 'Aucune entrée affectée pour le moment.';
+      default:         return 'Essayez une autre recherche.';
+    }
   }
 
   reload(page: number): void {
     this.loading.set(true);
-    this.badges.items(this.eId, this.mId, page, this.size, this.search).subscribe({
+    this.badges.items(this.eId, this.mId, page, this.size, this.search, this.status()).subscribe({
       next: (p) => {
         // Rebuild the locked set from server truth: a row is locked iff the DB
         // already has a name for it. This is what survives a refresh.
@@ -376,19 +501,16 @@ export class BadgeDetailComponent implements OnInit {
   // ---- Confirm modal ----
   private askConfirm(text: string, action: () => void): void {
     this.confirmText.set(text);
-    this.pending = action;
+    this.pendingAction = action;
     this.confirmOpen.set(true);
   }
-  doConfirm(): void { this.confirmOpen.set(false); this.confirmWarn.set(null); const a = this.pending; this.pending = null; if (a) a(); }
-  cancelConfirm(): void { this.confirmOpen.set(false); this.confirmWarn.set(null); this.pending = null; }
+  doConfirm(): void { this.confirmOpen.set(false); this.confirmWarn.set(null); const a = this.pendingAction; this.pendingAction = null; if (a) a(); }
+  cancelConfirm(): void { this.confirmOpen.set(false); this.confirmWarn.set(null); this.pendingAction = null; }
 
   // ---- Single one-time assignment (Change B) ----
   askSaveName(it: BadgeItem): void {
     const base = (this.drafts.get(it.numeroserie) || '').trim();
     if (!base) { this.errorMsg.set('Le nom est obligatoire.'); return; }
-    // Change A: the server auto-numbers names and keeps them unique
-    // (BASE → BASE-01, continuing the sequence). There is no « nom déjà
-    // existant » case anymore, so we simply confirm the definitive assignment.
     this.confirmWarn.set(null);
     this.askConfirm(CONFIRM_SINGLE, () => this.saveName(it, base));
   }
@@ -402,6 +524,9 @@ export class BadgeDetailComponent implements OnInit {
         this.assigned.add(it.numeroserie);   // lock only AFTER a successful save
         this.drafts.delete(it.numeroserie);
         this.saving.delete(it.numeroserie);
+        this.loadCounts();                    // Feature 2 — keep the counter live
+        // In the "Restantes" view the row has just left the set: refresh it away.
+        if (this.status() === 'pending') this.reload(this.page()?.page ?? 0);
       },
       error: (e) => {
         this.saving.delete(it.numeroserie);
@@ -432,7 +557,7 @@ export class BadgeDetailComponent implements OnInit {
   askAssign(p: LotPreview): void {
     if (!p.canAssign) return;
     const text = "Attention : cette affectation par lot est définitive. " + p.eligibleCount +
-      " invitation(s) seront affectées une seule fois et ne pourront plus être modifiées. Confirmer ?";
+      " entrée(s) seront affectées une seule fois et ne pourront plus être modifiées. Confirmer ?";
     this.confirmWarn.set(null);
     this.askConfirm(text, () => this.assignLot());
   }
@@ -445,7 +570,8 @@ export class BadgeDetailComponent implements OnInit {
         this.lotAssigning.set(false);
         this.assignedSerials = res.assigned.map(a => a.numeroserie);
         this.assignedDone.set(true);
-        this.lotMsg.set(res.assignedCount + ' invitation(s) affectée(s) avec succès.');
+        this.lotMsg.set(res.assignedCount + ' entrée(s) affectée(s) avec succès.');
+        this.loadCounts();                    // Feature 2 — keep the counter live
         this.reload(this.page()?.page ?? 0);
       },
       error: (e) => {
@@ -484,21 +610,22 @@ export class BadgeDetailComponent implements OnInit {
     call().subscribe({
       next: (res: any) => {
         this.badges.saveResponse(res, fallbackName);
-        // Change D: the backend skips unaffected invitations and lists them
+        // Change D: the backend skips unaffected entries and lists them
         // in the X-Skipped-* headers — surface that to the admin.
         const count = Number(res.headers?.get('X-Skipped-Count') || 0);
         if (count > 0) {
           const serials = res.headers?.get('X-Skipped-Serials') || '';
           const suffix = count > 50 ? ' …' : '';
-          this.skipMsg.set(`${count} invitation(s) non affectée(s) ignorée(s) : ${serials}${suffix}`);
+          this.skipMsg.set(count + ' entrée(s) non affectée(s) ignorée(s) : ' + serials + suffix);
         }
         this.generating.set(false);
+        this.loadCounts();
         this.reload(this.page()?.page ?? 0);
       },
       error: (err: any) => {
         this.generating.set(false);
         this.errorMsg.set(err?.status === 422
-          ? "Aucune invitation affectée : affectez un nom avant de générer le PDF."
+          ? "Aucune entrée affectée : affectez un nom avant de générer le PDF."
           : 'Échec de la génération du PDF. Veuillez réessayer.');
       }
     });

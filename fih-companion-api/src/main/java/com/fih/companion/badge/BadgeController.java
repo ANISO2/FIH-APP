@@ -36,7 +36,7 @@ public class BadgeController {
         return query.availability(eventId);
     }
 
-     @GetMapping("/posters/missing")
+    @GetMapping("/posters/missing")
     public List<MissingPosterDto> missingPosters() {
         return query.missingPosters();
     }
@@ -46,8 +46,16 @@ public class BadgeController {
                                        @RequestParam int modelId,
                                        @RequestParam(defaultValue = "0") int page,
                                        @RequestParam(defaultValue = "25") int size,
-                                       @RequestParam(required = false) String search) {
-        return query.items(eventId, modelId, page, size, search);
+                                       @RequestParam(required = false) String search,
+                                       // Feature 2 — default shows only NOT-yet-affected entries.
+                                       @RequestParam(defaultValue = "pending") String status) {
+        return query.items(eventId, modelId, page, size, search, status);
+    }
+
+     @GetMapping("/counts")
+    public com.fih.companion.badge.dto.CountsDto counts(@RequestParam int eventId,
+                                                        @RequestParam int modelId) {
+        return query.counts(eventId, modelId);
     }
 
     @GetMapping("/single")
@@ -101,7 +109,7 @@ public class BadgeController {
         return response;
     }
 
-     private boolean isUnaffected(BadgeRecord rec) {
+    private boolean isUnaffected(BadgeRecord rec) {
         return rec.affecteeA() == null || rec.affecteeA().isBlank();
     }
 

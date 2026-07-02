@@ -1,5 +1,6 @@
 package com.fih.companion.security;
 
+import com.fih.companion.diagnostics.ConsoleLog;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -34,20 +35,20 @@ public class SecurityConfig {
             "/api/stats/rejets"
     };
 
-    /**
-     * Comma-separated list of origins allowed to call the API from a browser.
-     * Set FIH_CORS_ALLOWED_ORIGINS in production to your frontend URL, e.g.
-     *   FIH_CORS_ALLOWED_ORIGINS=https://fih-admin.example.tn
-     * Multiple origins are allowed: "https://a.tn,https://b.tn".
-     * Default "*" is convenient for testing but you should pin it in prod.
-     */
+
     @Value("${FIH_CORS_ALLOWED_ORIGINS:*}")
     private String allowedOrigins;
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http,
                                            JwtAuthFilter jwtAuthFilter,
-                                           DeviceTokenFilter deviceTokenFilter) throws Exception {
+                                           DeviceTokenFilter deviceTokenFilter,
+                                           CorsLoggingFilter corsLoggingFilter) throws Exception {
+        ConsoleLog.log("SECURITY", "building filter chain — order: CorsLoggingFilter -> Spring CORS "
+                + "-> DeviceTokenFilter -> JwtAuthFilter -> authorization rules. "
+                + "Public: OPTIONS/**, /api/auth/login, /api/events/**, /api/diagnostics/**. "
+                + "DEVICE or ADMIN: /api/verify/**, GET mobile stats. "
+                + "ADMIN only: /api/stats/**, /api/badges/**, /api/invitations/** (the write endpoints).");
         http
                 // Enable CORS using the bean below.
                 .cors(Customizer.withDefaults())
@@ -73,7 +74,9 @@ public class SecurityConfig {
                 .exceptionHandling(e -> e.authenticationEntryPoint(
                         (req, res, ex) -> res.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized")))
                 .addFilterBefore(deviceTokenFilter, UsernamePasswordAuthenticationFilter.class)
-                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
+                // Feature 1 — trace the incoming Origin / preflight before anything else runs.
+                .addFilterBefore(corsLoggingFilter, org.springframework.web.filter.CorsFilter.class);
         return http.build();
     }
 
@@ -89,8 +92,12 @@ public class SecurityConfig {
         if (origins.size() == 1 && "*".equals(origins.get(0))) {
             // Wildcard: allow any origin. With credentials off this is fine for token-in-header auth.
             cfg.addAllowedOriginPattern("*");
+            ConsoleLog.log("CORS", "resolved allowed-origins = * (WILDCARD, any origin). "
+                    + "Convenient for testing; pin FIH_CORS_ALLOWED_ORIGINS to the real frontend URL in production.");
         } else {
             cfg.setAllowedOrigins(origins);
+            ConsoleLog.log("CORS", "resolved allowed-origins = " + origins
+                    + " — any browser Origin NOT in this list will be blocked.");
         }
 
         cfg.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));

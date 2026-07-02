@@ -4,6 +4,7 @@ import com.fih.companion.access.AccessZoneResolver;
 import com.fih.companion.badge.dto.*;
 import com.fih.companion.badge.projection.AvailabilityProjection;
 import com.fih.companion.badge.projection.BadgeItemProjection;
+import com.fih.companion.badge.projection.CountsProjection;
 import com.fih.companion.domain.BadgeAffectation;
 import com.fih.companion.domain.Billet;
 import com.fih.companion.domain.ModeleBillet;
@@ -28,6 +29,9 @@ import java.util.*;
 @Transactional(readOnly = true)
 public class BadgeQueryService {
 
+    /** Feature 2 — allowed status filter values for the items page. */
+    private static final Set<String> STATUSES = Set.of("pending", "affected", "all");
+
     private final BadgeRepository badgeRepo;
     private final BilletRepository billetRepo;
     private final VoucherRepository voucherRepo;
@@ -38,12 +42,13 @@ public class BadgeQueryService {
     private final AccessZoneResolver zones;
     private final PosterResolver posters;
     private final BadgeProperties props;
+    private final ModelClassificationService classification;
 
     public BadgeQueryService(BadgeRepository badgeRepo, BilletRepository billetRepo, VoucherRepository voucherRepo,
                              ModeleBilletRepository modeleRepo, EvenementRepository eventRepo,
                              HolderRepository holderRepo, BadgeAffectationRepository affectationRepo,
                              AccessZoneResolver zones, PosterResolver posters,
-                             BadgeProperties props) {
+                             BadgeProperties props, ModelClassificationService classification) {
         this.badgeRepo = badgeRepo;
         this.billetRepo = billetRepo;
         this.voucherRepo = voucherRepo;
@@ -54,15 +59,19 @@ public class BadgeQueryService {
         this.zones = zones;
         this.posters = posters;
         this.props = props;
+        this.classification = classification;
     }
 
     // -------------------------------------------------------------- availability
     public List<AvailabilityDto> availability(Integer eventId) {
+        // Feature 3 — show EVERY non-paid model (invitations, VIP cards, press,
+        // staff/sponsor badges …), not just the printable invitation models.
+        // Paid models (Billet Gradins) stay out of this section entirely.
         List<AvailabilityProjection> rows = badgeRepo.availability(eventId).stream()
-                .filter(r -> props.isInvitationModel(r.getModelId()))
+                .filter(r -> classification.isAffectable(r.getModelId()))
                 .toList();
 
-         Map<String, Boolean> posterCache = new HashMap<>();
+        Map<String, Boolean> posterCache = new HashMap<>();
 
         List<AvailabilityDto> out = new ArrayList<>(rows.size());
         for (AvailabilityProjection r : rows) {
@@ -72,16 +81,21 @@ public class BadgeQueryService {
                     r.getEventId(), r.getEventTitle(), r.getEventDate().toLocalDate(),
                     r.getModelId(), r.getModelName(), zones.resolve(r.getModelId()),
                     (int) r.getInjectedCount(), (int) r.getBilletCount(), (int) r.getVoucherCount(),
-                    hasPoster));
+                    hasPoster,
+                    // Feature 3 — printable = configured invitation model (keeps Imprimer);
+                    // everything else non-paid is assign-only.
+                    classification.isPrintable(r.getModelId())));
         }
         return out;
     }
 
     // ------------------------------------------------------------- missing posters
-     public List<MissingPosterDto> missingPosters() {
+    public List<MissingPosterDto> missingPosters() {
         Map<Integer, MissingPosterDto> byEvent = new LinkedHashMap<>();
         for (AvailabilityProjection r : badgeRepo.availability(null)) {
-            if (!props.isInvitationModel(r.getModelId())) continue;
+            // Posters are only used by the printable invitation-PDF layout, so a
+            // "missing poster" only matters for printable models.
+            if (!classification.isPrintable(r.getModelId())) continue;
             if (posters.exists(r.getEventTitle())) continue;
             int ev = r.getEventId();
             int add = (int) r.getInjectedCount();
@@ -96,15 +110,30 @@ public class BadgeQueryService {
     }
 
     // -------------------------------------------------------------- items page
-    public PageDto<BadgeItemDto> items(int eventId, int modelId, int page, int size, String search) {
-        requireInvitation(modelId);
+    public PageDto<BadgeItemDto> items(int eventId, int modelId, int page, int size, String search, String status) {
+        requireAffectable(modelId);
+        String st = normalizeStatus(status);
         String s = (search == null || search.isBlank()) ? null : search.trim();
-        long total = badgeRepo.itemsCount(eventId, modelId, s);
-        List<BadgeItemDto> content = badgeRepo.items(eventId, modelId, s, size, page * size).stream()
+        long total = badgeRepo.itemsCount(eventId, modelId, s, st);
+        List<BadgeItemDto> content = badgeRepo.items(eventId, modelId, s, st, size, page * size).stream()
                 .map(this::toItemDto)
                 .toList();
         int totalPages = size == 0 ? 0 : (int) Math.ceil((double) total / size);
         return new PageDto<>(content, page, size, total, totalPages);
+    }
+
+    // ------------------------------------------------------------------ counts
+    public CountsDto counts(int eventId, int modelId) {
+        requireAffectable(modelId);
+        CountsProjection c = badgeRepo.counts(eventId, modelId);
+        if (c == null) return new CountsDto(0, 0, 0);
+        return new CountsDto(c.getAffected(), c.getPending(), c.getTotal());
+    }
+
+    private String normalizeStatus(String status) {
+        if (status == null) return "pending";
+        String s = status.trim().toLowerCase();
+        return STATUSES.contains(s) ? s : "pending";
     }
 
     private BadgeItemDto toItemDto(BadgeItemProjection p) {
@@ -118,18 +147,18 @@ public class BadgeQueryService {
         if ("voucher".equalsIgnoreCase(type)) {
             Voucher v = voucherRepo.findByCodebarre(code).or(() -> voucherRepo.findByNumeroserie(code))
                     .orElseThrow(() -> notFound(code));
-            requireInvitation(v.getModelebillet());
+            requirePrintable(v.getModelebillet());
             return record("VOUCHER", v.getNumeroserie(), v.getCodebarre(), null, v.getEvenement(), v.getModelebillet());
         }
         Billet b = billetRepo.findByCodebarre(code).or(() -> billetRepo.findByNumeroserie(code))
                 .orElseThrow(() -> notFound(code));
-        requireInvitation(b.getModelebillet());
+        requirePrintable(b.getModelebillet());
         String holder = holderRepo.findByBillet(b.getNumeroserie()).map(this::name).orElse(null);
         return record("BILLET", b.getNumeroserie(), b.getCodebarre(), holder, b.getEvenement(), b.getModelebillet());
     }
 
     public List<BadgeRecord> batch(int eventId, int modelId, List<String> codes) {
-        requireInvitation(modelId);
+        requirePrintable(modelId);
         Evenement e = eventRepo.findById(eventId).orElseThrow(() -> notFound("event " + eventId));
         ModeleBillet m = modeleRepo.findById(modelId).orElse(null);
         List<String> zoneList = zones.resolve(modelId);
@@ -140,7 +169,7 @@ public class BadgeQueryService {
             if (wanted != null && !wanted.contains(p.getCodebarre()) && !wanted.contains(p.getNumeroserie())) {
                 continue;
             }
-             out.add(new BadgeRecord(p.getType(), p.getNumeroserie(), p.getCodebarre(), p.getHolderName(),
+            out.add(new BadgeRecord(p.getType(), p.getNumeroserie(), p.getCodebarre(), p.getHolderName(),
                     p.getAffecteeA(),
                     e.getTitre(), e.getDdate(), m == null ? null : m.getModele(), zoneList, null));
         }
@@ -159,7 +188,7 @@ public class BadgeQueryService {
                 m == null ? null : m.getModele(), zones.resolve(modelId), null);
     }
 
-     private String affecteeName(String numeroserie) {
+    private String affecteeName(String numeroserie) {
         return affectationRepo.findById(numeroserie).map(BadgeAffectation::getAffecteeA).orElse(null);
     }
 
@@ -169,10 +198,18 @@ public class BadgeQueryService {
         return full.isEmpty() ? null : full;
     }
 
-     private void requireInvitation(Integer modelId) {
-        if (!props.isInvitationModel(modelId)) {
+    /** Print (Imprimer/PDF) is restricted to the configured printable invitation models. */
+    private void requirePrintable(Integer modelId) {
+        if (!classification.isPrintable(modelId)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND,
-                    "Badge generation is restricted to invitation models");
+                    "Badge PDF generation is restricted to printable invitation models");
+        }
+    }
+
+     private void requireAffectable(Integer modelId) {
+        if (!classification.isAffectable(modelId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND,
+                    "This section only handles non-paid models (paid billets/vouchers are excluded)");
         }
     }
 

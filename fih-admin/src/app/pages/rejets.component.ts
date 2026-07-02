@@ -9,7 +9,7 @@ import { LoadingSkeletonComponent } from '../shared/loading-skeleton.component';
 import { EmptyStateComponent } from '../shared/empty-state.component';
 import { ChartCardComponent } from '../shared/chart-card.component';
 import { BRAND, SERIES_COLORS } from '../shared/echarts-theme';
-import { NumPipe, PctPipe } from '../shared/format';
+import { NumPipe, PctPipe, realDate } from '../shared/format';
 
 /** Map a rejection description to a stable category (mirrors the backend grouping). */
 function categorie(desc: string | null): string {
@@ -343,12 +343,11 @@ export class RejetsComponent {
     return 'rgba(91,100,112,.10)';
   }
   fmtDateTime(s: string | null): string {
-    if (!s) return '—';
-    const d = new Date(s);
-    return isNaN(d.getTime()) ? '—' : d.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
+    const d = realDate(s);
+    return d ? d.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : '—';
   }
   fmtDay(s: string): string {
-    const d = new Date(s);
-    return isNaN(d.getTime()) ? s : d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' });
+    const d = realDate(s);
+    return d ? d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }) : '—';
   }
 }

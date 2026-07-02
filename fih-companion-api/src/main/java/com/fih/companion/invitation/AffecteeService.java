@@ -1,6 +1,6 @@
 package com.fih.companion.invitation;
 
-import com.fih.companion.badge.BadgeProperties;
+import com.fih.companion.badge.ModelClassificationService;
 import com.fih.companion.domain.BadgeAffectation;
 import com.fih.companion.domain.Billet;
 import com.fih.companion.invitation.dto.AffecteeDto;
@@ -31,11 +31,11 @@ import java.util.regex.Pattern;
 @Service
 public class AffecteeService {
 
-     private static final int NUMBERING_RETRIES = 5;
+    private static final int NUMBERING_RETRIES = 5;
 
     private final BadgeAffectationRepository affectationRepository;
     private final BilletRepository billetRepository;
-    private final BadgeProperties badgeProperties;
+    private final ModelClassificationService classification;
 
 
     @Autowired
@@ -44,13 +44,13 @@ public class AffecteeService {
 
     public AffecteeService(BadgeAffectationRepository affectationRepository,
                            BilletRepository billetRepository,
-                           BadgeProperties badgeProperties) {
+                           ModelClassificationService classification) {
         this.affectationRepository = affectationRepository;
         this.billetRepository = billetRepository;
-        this.badgeProperties = badgeProperties;
+        this.classification = classification;
     }
 
-     @Transactional(readOnly = true)
+    @Transactional(readOnly = true)
     public Optional<AffecteeDto> get(String numeroserie) {
         return affectationRepository.findById(numeroserie).map(this::toDto);
     }
@@ -70,17 +70,17 @@ public class AffecteeService {
                 "Conflit de numérotation, veuillez réessayer.");
     }
 
-     @Transactional
+    @Transactional
     public AffecteeDto setOnce(String numeroserie, String name, String updatedBy) {
         Billet billet = billetRepository.findByNumeroserie(numeroserie)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
                         "Aucun billet trouvé pour le numéro de série : " + numeroserie));
 
-        if (!badgeProperties.isInvitationModel(billet.getModelebillet())) {
+        if (!classification.isAffectable(billet.getModelebillet())) {
             throw new ResponseStatusException(
                     HttpStatus.UNPROCESSABLE_ENTITY,
-                    "Le numéro de série ne correspond pas à un billet d'invitation.");
+                    "Ce numéro de série correspond à un billet payant et ne peut pas être affecté ici.");
         }
 
         String base = name == null ? "" : name.trim();
@@ -95,7 +95,7 @@ public class AffecteeService {
                     "Cette invitation est déjà affectée et ne peut plus être modifiée.");
         }
 
-         // sequence from the highest number already used for this base.
+        // sequence from the highest number already used for this base.
         int next = nextNumberForBase(base);
         String unique = formatName(base, next, widthFor(next));
 
@@ -104,7 +104,7 @@ public class AffecteeService {
     }
 
 
-     @Transactional(readOnly = true)
+    @Transactional(readOnly = true)
     public LotPreviewDto previewLot(LotRequest req) {
         Lot lot = buildLot(req);
 
@@ -145,7 +145,7 @@ public class AffecteeService {
                 "Conflit de numérotation sur le lot, veuillez réessayer.");
     }
 
-     @Transactional
+    @Transactional
     public LotResultDto assignLotOnce(LotRequest req, String updatedBy) {
         Lot lot = buildLot(req);
 
@@ -172,13 +172,13 @@ public class AffecteeService {
         return new LotResultDto(assigned.size(), assigned);
     }
 
-     @Transactional(readOnly = true)
+    @Transactional(readOnly = true)
     public String manifestCsv(String startSerie, String endSerie) {
         String start = trimOr400(startSerie, "Le numéro de série de début est obligatoire.");
         String end = trimOr400(endSerie, "Le numéro de série de fin est obligatoire.");
         StringBuilder sb = new StringBuilder("nom,numeroserie,codebarre,evenement\n");
         for (LotRowProjection r : billetRepository.findRange(start, end)) {
-            if (!badgeProperties.isInvitationModel(r.getModelId())) continue;
+            if (!classification.isAffectable(r.getModelId())) continue;
             if (r.getAffecteeA() == null) continue;
             sb.append(csv(r.getAffecteeA())).append(',')
                     .append(csv(r.getNumeroserie())).append(',')
@@ -188,14 +188,14 @@ public class AffecteeService {
         return sb.toString();
     }
 
-     @Transactional
+    @Transactional
     public void markPrinted(Collection<String> serials) {
         if (serials == null || serials.isEmpty()) return;
         affectationRepository.markPrinted(serials, LocalDateTime.now());
     }
 
 
-     private Lot buildLot(LotRequest req) {
+    private Lot buildLot(LotRequest req) {
         if (req == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Requête de lot manquante.");
         }
@@ -211,7 +211,7 @@ public class AffecteeService {
         List<LotRowProjection> eligibleRows = new ArrayList<>();
         int nonInvitation = 0;
         for (LotRowProjection r : rows) {
-            if (badgeProperties.isInvitationModel(r.getModelId())) eligibleRows.add(r);
+            if (classification.isAffectable(r.getModelId())) eligibleRows.add(r);
             else nonInvitation++;
         }
 
@@ -246,17 +246,17 @@ public class AffecteeService {
                 try {
                     max = Math.max(max, Integer.parseInt(m.group(1)));
                 } catch (NumberFormatException ignore) {
-                 }
+                }
             }
         }
         return max + 1;
     }
 
-     private String formatName(String base, int number, int width) {
+    private String formatName(String base, int number, int width) {
         return String.format("%s-%0" + width + "d", base, number);
     }
 
-     private int widthFor(int number) {
+    private int widthFor(int number) {
         return Math.max(2, Integer.toString(Math.max(number, 1)).length());
     }
 
@@ -266,7 +266,7 @@ public class AffecteeService {
         return t;
     }
 
-     private String csv(String v) {
+    private String csv(String v) {
         if (v == null) return "";
         if (v.contains(",") || v.contains("\"") || v.contains("\n")) {
             return "\"" + v.replace("\"", "\"\"") + "\"";
@@ -279,7 +279,7 @@ public class AffecteeService {
                 e.getUpdatedBy(), e.getPrintedAt());
     }
 
-     private static final class Lot {
+    private static final class Lot {
         String baseName;
         List<Assignment> eligible;
         int nonInvitationCount;

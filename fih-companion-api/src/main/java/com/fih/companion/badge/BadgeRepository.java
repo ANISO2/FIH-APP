@@ -2,6 +2,7 @@ package com.fih.companion.badge;
 
 import com.fih.companion.badge.projection.AvailabilityProjection;
 import com.fih.companion.badge.projection.BadgeItemProjection;
+import com.fih.companion.badge.projection.CountsProjection;
 import com.fih.companion.domain.Tturnstile;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.Repository;
@@ -31,6 +32,13 @@ public interface BadgeRepository extends Repository<Tturnstile, Integer> {
             """, nativeQuery = true)
     List<AvailabilityProjection> availability(@Param("eventId") Integer eventId);
 
+    /**
+     * Feature 2 — page of entries for one (event, model), optionally filtered by
+     * assignment status. {@code status}:
+     *   'pending'  -> only entries with NO name yet (affectee_a IS NULL),
+     *   'affected' -> only entries already assigned (affectee_a IS NOT NULL),
+     *   'all'      -> both.
+     */
     @Query(value = """
             SELECT type AS "type", numeroserie AS "numeroserie", codebarre AS "codebarre",
                    holderName AS "holderName", affecteeA AS "affecteeA", printedAt AS "printedAt"
@@ -53,12 +61,16 @@ public interface BadgeRepository extends Repository<Tturnstile, Integer> {
                    OR x.codebarre ILIKE concat('%', :search, '%')
                    OR x.holderName ILIKE concat('%', :search, '%')
                    OR x.affecteeA ILIKE concat('%', :search, '%'))
+              AND (:status = 'all'
+                   OR (:status = 'affected' AND x.affecteeA IS NOT NULL)
+                   OR (:status = 'pending'  AND x.affecteeA IS NULL))
             ORDER BY x.numeroserie
             LIMIT :size OFFSET :offset
             """, nativeQuery = true)
     List<BadgeItemProjection> items(@Param("eventId") int eventId,
                                     @Param("modelId") int modelId,
                                     @Param("search") String search,
+                                    @Param("status") String status,
                                     @Param("size") int size,
                                     @Param("offset") int offset);
 
@@ -82,12 +94,39 @@ public interface BadgeRepository extends Repository<Tturnstile, Integer> {
                    OR x.codebarre ILIKE concat('%', :search, '%')
                    OR x.holderName ILIKE concat('%', :search, '%')
                    OR x.affecteeA ILIKE concat('%', :search, '%'))
+              AND (:status = 'all'
+                   OR (:status = 'affected' AND x.affecteeA IS NOT NULL)
+                   OR (:status = 'pending'  AND x.affecteeA IS NULL))
             """, nativeQuery = true)
     long itemsCount(@Param("eventId") int eventId,
                     @Param("modelId") int modelId,
-                    @Param("search") String search);
+                    @Param("search") String search,
+                    @Param("status") String status);
 
-     @Query(value = """
+    /**
+     * Feature 2 — affected / pending / total counts for one (event, model).
+     * Counts the full population (search-independent) so the header counter is
+     * a stable "X affectées / Y restantes".
+     */
+    @Query(value = """
+            SELECT count(*) FILTER (WHERE x.affecteeA IS NOT NULL) AS "affected",
+                   count(*) FILTER (WHERE x.affecteeA IS NULL)     AS "pending",
+                   count(*)                                        AS "total"
+            FROM (
+              SELECT ba.affectee_a AS affecteeA
+              FROM billet b
+              LEFT JOIN badge_affectation ba ON ba.numeroserie = b.numeroserie
+              WHERE b.evenement = :eventId AND b.modelebillet = :modelId
+              UNION ALL
+              SELECT ba.affectee_a
+              FROM voucher v
+              LEFT JOIN badge_affectation ba ON ba.numeroserie = v.numeroserie
+              WHERE v.evenement = :eventId AND v.modelebillet = :modelId
+            ) x
+            """, nativeQuery = true)
+    CountsProjection counts(@Param("eventId") int eventId, @Param("modelId") int modelId);
+
+    @Query(value = """
             SELECT 'BILLET' AS "type", b.numeroserie AS "numeroserie", b.codebarre AS "codebarre",
                    NULLIF(trim(coalesce(h.firstname, '') || ' ' || coalesce(h.lastname, '')), '') AS "holderName",
                    ba.affectee_a AS "affecteeA", ba.printed_at AS "printedAt"

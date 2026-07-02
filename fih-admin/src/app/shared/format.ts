@@ -18,13 +18,26 @@ export class PctPipe implements PipeTransform {
   }
 }
 
-/** "2025-07-29" -> "29 juil. 2025" (ou "29 juil." en version courte) */
+/**
+ * Parse a date string into a real Date, or null when there is effectively no
+ * date. A missing date is stored/serialised as the Unix epoch (1970-01-01,
+ * timestamp 0) and must never be shown as "1970" in the UI — so any date whose
+ * year is 1970 or earlier is treated as "no date".
+ */
+export function realDate(value: string | null | undefined): Date | null {
+  if (!value) return null;
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return null;
+  if (d.getFullYear() <= 1970) return null;   // hide Unix-epoch artefact dates
+  return d;
+}
+
+/** "2025-07-29" -> "29 juil. 2025" (ou "29 juil." en version courte). 1970/epoch -> "—" */
 @Pipe({ name: 'fdate', standalone: true })
 export class FDatePipe implements PipeTransform {
   transform(value: string | null | undefined, short = false): string {
-    if (!value) return '—';
-    const d = new Date(value);
-    if (isNaN(d.getTime())) return value;
+    const d = realDate(value);
+    if (!d) return '—';
     const opts: Intl.DateTimeFormatOptions = short
       ? { day: '2-digit', month: 'short' }
       : { day: '2-digit', month: 'short', year: 'numeric' };

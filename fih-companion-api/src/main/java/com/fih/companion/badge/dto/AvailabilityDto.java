@@ -8,6 +8,7 @@ public record AvailabilityDto(
         int eventId, String eventTitle, LocalDate eventDate,
         int modelId, String modelName, List<String> accessZones,
         int injectedCount, int billetCount, int voucherCount,
-        boolean eventHasPoster
+        boolean eventHasPoster,
+         boolean printable
 ) {
 }

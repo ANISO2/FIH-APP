@@ -105,7 +105,7 @@ export class ShellComponent implements OnInit {
     { label: 'Analyse des rejets', icon: 'report', path: 'rejets' },
     { label: 'Vérification billet', icon: 'confirmation_number', path: 'verification/billet' },
     { label: 'Vérification voucher', icon: 'local_activity', path: 'verification/voucher' },
-    { label: 'Badges', icon: 'badge', path: 'badges' },
+    { label: 'Invitations & Badges', icon: 'badge', path: 'badges' },
     { label: 'Portes', icon: 'sensor_door', path: 'gates' }
   ];
 

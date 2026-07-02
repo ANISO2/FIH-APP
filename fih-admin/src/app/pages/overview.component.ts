@@ -10,6 +10,7 @@ import { ChartCardComponent } from '../shared/chart-card.component';
 import { LoadingSkeletonComponent } from '../shared/loading-skeleton.component';
 import { EmptyStateComponent } from '../shared/empty-state.component';
 import { BRAND } from '../shared/echarts-theme';
+import { realDate } from '../shared/format';
 
 @Component({
   selector: 'app-overview',
@@ -111,8 +112,8 @@ export class OverviewComponent {
   }
 
   private fmtDate(s: string): string {
-    const d = new Date(s);
-    return d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' });
+    const d = realDate(s);
+    return d ? d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }) : '—';
   }
 
   private buildAttendance(rows: EntryByDay[]): void {

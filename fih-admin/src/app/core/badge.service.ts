@@ -3,7 +3,8 @@ import { HttpClient, HttpResponse } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import {
   Availability, BadgeItem, Page, Affectee,
-  MissingPoster, LotRequest, LotPreview, LotResult
+  MissingPoster, LotRequest, LotPreview, LotResult,
+  BadgeCounts, BadgeStatus
 } from './models';
 
 /** Badge data + PDF download calls. PDFs come back as Blobs we save to disk. */
@@ -47,10 +48,17 @@ export class BadgeService {
     return this.http.get<MissingPoster[]>('/api/badges/posters/missing');
   }
 
-  items(eventId: number, modelId: number, page: number, size: number, search?: string): Observable<Page<BadgeItem>> {
-    let url = `/api/badges/items?eventId=${eventId}&modelId=${modelId}&page=${page}&size=${size}`;
+  // Feature 2: `status` filters by assignment state (default 'pending' on the backend).
+  items(eventId: number, modelId: number, page: number, size: number,
+        search?: string, status: BadgeStatus = 'pending'): Observable<Page<BadgeItem>> {
+    let url = `/api/badges/items?eventId=${eventId}&modelId=${modelId}&page=${page}&size=${size}&status=${status}`;
     if (search) url += `&search=${encodeURIComponent(search)}`;
     return this.http.get<Page<BadgeItem>>(url);
+  }
+
+  /** Feature 2: affected / pending / total counter for one (event, model). */
+  counts(eventId: number, modelId: number): Observable<BadgeCounts> {
+    return this.http.get<BadgeCounts>(`/api/badges/counts?eventId=${eventId}&modelId=${modelId}`);
   }
 
   // observe: 'response' so we can read the Content-Disposition filename header.

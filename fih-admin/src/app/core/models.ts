@@ -30,7 +30,12 @@ export interface Availability {
   modelId: number; modelName: string; accessZones: string[];
   injectedCount: number; billetCount: number; voucherCount: number;
   eventHasPoster: boolean;            // Change A: event has a poster file?
+  printable: boolean;                 // Feature 3: model may be printed (Imprimer). false = assign-only.
 }
+/** Feature 2 — assignment progress for one (event, model). total = affected + pending. */
+export interface BadgeCounts { affected: number; pending: number; total: number; }
+/** Feature 2 — which entries to show in the detail list. */
+export type BadgeStatus = 'pending' | 'affected' | 'all';
 export interface BadgeItem {
   type: string; numeroserie: string; codebarre: string;
   holderName: string | null; affecteeA: string | null;
