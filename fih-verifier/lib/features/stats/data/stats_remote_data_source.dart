@@ -4,6 +4,7 @@ import '../../../core/network/api_endpoints.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/network/dio_client.dart';
 import '../domain/stats_models.dart';
+import '../domain/tourniquet_models.dart';
 
 /// Reads the GLOBAL stats feeds (device-token allowed). Year is sent as an
 /// optional `?year=` query param. Polls hit the server's short-TTL cache (we
@@ -34,6 +35,12 @@ class StatsRemoteDataSource {
 
   Future<List<EntryByDay>> entriesByDay(int? year) =>
       _list(ApiEndpoints.statsEntriesByDay(), year, EntryByDay.fromJson);
+
+  /// Backoffice "Statistique des tourniquets" feed (per event + per model). Used
+  /// by the mobile "today details" screen. Already device-readable — no new
+  /// backend endpoint.
+  Future<List<TourniquetEvent>> tourniquets(int? year) =>
+      _list(ApiEndpoints.statsTourniquets(), year, TourniquetEvent.fromJson);
 
   Future<T> _obj<T>(String url, int? year, T Function(Map<String, dynamic>) parse) async {
     try {

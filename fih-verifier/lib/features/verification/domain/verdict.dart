@@ -52,11 +52,11 @@ class VerdictView {
             'VALIDE', 'Laisser passer');
       case Verdict.alreadyUsed:
         return const VerdictView(
-            AppColors.verdictWarn, Icons.history_rounded,
+            AppColors.verdictStop, Icons.history_rounded,
             'DÉJÀ UTILISÉ', 'Déjà passé — refuser');
       case Verdict.notActive:
         return const VerdictView(
-            AppColors.verdictWarn, Icons.block_rounded,
+            AppColors.verdictStop, Icons.block_rounded,
             'NON ACTIVÉ', 'Billet inactif — refuser');
       case Verdict.cancelled:
         return const VerdictView(

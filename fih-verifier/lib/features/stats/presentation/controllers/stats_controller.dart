@@ -14,7 +14,6 @@ class TodayStats {
   final int rejected;
   final int total;      // all scans that day
   final double rate;    // acceptance %, 0..100
-  final List<EntryByDay> trend; // up to the last 7 active days (incl. `day`)
 
   const TodayStats({
     required this.day,
@@ -23,7 +22,6 @@ class TodayStats {
     required this.rejected,
     required this.total,
     required this.rate,
-    required this.trend,
   });
 }
 
@@ -135,7 +133,6 @@ class StatsController extends ChangeNotifier {
     }
 
     final chosen = todayRow ?? (sorted.isNotEmpty ? sorted.last : null);
-    final trend = sorted.length <= 7 ? sorted : sorted.sublist(sorted.length - 7);
 
     if (chosen == null) {
       return TodayStats(
@@ -145,7 +142,6 @@ class StatsController extends ChangeNotifier {
         rejected: 0,
         total: 0,
         rate: 0,
-        trend: const [],
       );
     }
 
@@ -158,7 +154,6 @@ class StatsController extends ChangeNotifier {
       rejected: chosen.rejected,
       total: total,
       rate: rate,
-      trend: trend,
     );
   }
 

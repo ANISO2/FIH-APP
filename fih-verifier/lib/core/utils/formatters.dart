@@ -23,9 +23,20 @@ class Formatters {
 
   /// Parse a backend ISO date/datetime string. Spring serializes
   /// LocalDate/LocalDateTime as ISO-8601 strings, so DateTime.tryParse works.
+  ///
+  /// A missing/zero legacy value surfaces as the Unix epoch (1970-01-01) once
+  /// parsed, which would otherwise render as "01/01/1970". We treat any
+  /// epoch/zero date as "no date" (null) so every screen shows "—" instead.
+  /// The festival has no real pre-1971 dates, so `year <= 1970` is a safe
+  /// sentinel. This is the single chokepoint: every date in the app is parsed
+  /// here, so nulling it once hides 1970 everywhere.
   static DateTime? parseDate(Object? raw) {
     if (raw == null) return null;
-    if (raw is String && raw.isNotEmpty) return DateTime.tryParse(raw);
+    if (raw is String && raw.isNotEmpty) {
+      final parsed = DateTime.tryParse(raw);
+      if (parsed == null || parsed.year <= 1970) return null;
+      return parsed;
+    }
     return null;
   }
 }

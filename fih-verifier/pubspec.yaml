@@ -28,6 +28,15 @@ dependencies:
   # Locale-aware dates + TND money. Version aligned with flutter_localizations.
   intl: ^0.20.2
 
+  # Audible scan feedback (accept/refuse tones). Replaces SystemSound, which is
+  # silent on Android unless system touch-sounds are on. Used only in
+  # core/feedback/feedback_service.dart.
+  audioplayers: ^6.1.0
+
+  # Persist the runtime-editable backend API base URL (Réglages → API). Used
+  # only in core/config/app_config.dart.
+  shared_preferences: ^2.3.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -35,3 +44,5 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/sounds/

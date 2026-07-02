@@ -8,18 +8,18 @@ spring:
   # so on your laptop it "just works", and on the server you only set env vars.
   # ---------------------------------------------------------------------------
   datasource:
-    # The local restored copy of the backup. NOT the real shared DB.
-    url: ${FIH_DB_URL:jdbc:postgresql://localhost:5432/billeterie_fih_dev}
-    # We connect as the SELECT-only role, never as the postgres superuser.
-    username: ${FIH_DB_USER:fih_ro}
-    password: ${FIH_DB_PASSWORD:fih_ro_pwd}
+    # Local restored copy of the 2026 backup.
+    url: ${FIH_DB_URL:jdbc:postgresql://localhost:5432/billeterie-fih-2026}
+    # Connecting as the postgres superuser (no separate read-only role).
+    username: ${FIH_DB_USER:postgres}
+    password: ${FIH_DB_PASSWORD:admin}
     driver-class-name: org.postgresql.Driver
     hikari:
 
       read-only: false
       # ----------------------------------------------------------------------
       pool-name: fih-pool
-       # server's max_connections, leaving room for the other apps. 10 is a sane
+      # server's max_connections, leaving room for the other apps. 10 is a sane
       # start for one instance; raise only with metrics + DBA sign-off.
       maximum-pool-size: ${FIH_DB_POOL_MAX:10}
       minimum-idle: ${FIH_DB_POOL_MIN_IDLE:2}
@@ -91,7 +91,8 @@ fih:
 
   security:
     jwt:
-      secret: ${FIH_JWT_SECRET:change-me-to-a-long-random-secret-of-32+chars!!}
+      secret: ${FIH_JWT_SECRET:k9Xz2pQ7mR4vL8nW3jT6yB1cF5hD0gS9aZ4eU7iO2xK8wN5qM3rV6tP1lJ0bH4dC7fG2yA9sE5uI8oR3}
+
       expiration-minutes: ${FIH_JWT_EXPIRATION_MINUTES:480}
     device-token: ${FIH_DEVICE_TOKEN:dev-device-token}
 
@@ -125,4 +126,3 @@ fih:
 logging:
   level:
     org.hibernate.SQL: info
-

@@ -1,4 +1,5 @@
 import '../domain/stats_models.dart';
+import '../domain/tourniquet_models.dart';
 import 'stats_remote_data_source.dart';
 
 /// Orchestrates the dashboard loads. The "today" view needs only the
@@ -12,6 +13,9 @@ class StatsRepository {
   /// Per-day turnstile entries (date / scans / accepted / rejected). The today
   /// view picks today's row from this list.
   Future<List<EntryByDay>> entriesByDay(int? year) => _remote.entriesByDay(year);
+
+  /// Backoffice "Statistique des tourniquets" feed for the today-details screen.
+  Future<List<TourniquetEvent>> tourniquets(int? year) => _remote.tourniquets(year);
 
   /// Full global snapshot (kept for reuse; not used by the today view).
   Future<StatsDashboard> dashboard(int? year) async {
