@@ -598,10 +598,11 @@ export class BadgeDetailComponent implements OnInit {
     this.run(() => this.badges.single(it.type.toLowerCase(), it.codebarre), `badge_${it.codebarre}.pdf`);
   }
   generateSelected(): void {
-    this.run(() => this.badges.batch(this.eId, this.mId, [...this.selected]), 'badges.pdf');
+    // Feature 2 — the print-many flow now returns a ZIP of one PDF per invitation.
+    this.run(() => this.badges.batch(this.eId, this.mId, [...this.selected]), 'badges.zip');
   }
   generateAll(): void {
-    this.run(() => this.badges.batch(this.eId, this.mId, null), 'badges.pdf');
+    this.run(() => this.badges.batch(this.eId, this.mId, null), 'badges.zip');
   }
   private run(call: () => any, fallbackName: string): void {
     this.generating.set(true);

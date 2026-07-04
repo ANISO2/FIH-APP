@@ -27,18 +27,12 @@ public interface BadgeRepository extends Repository<Tturnstile, Integer> {
                    ON b.evenement = k.evenement AND b.modelebillet = k.modelebillet
             LEFT JOIN (SELECT evenement, modelebillet, count(*) cnt FROM voucher GROUP BY 1, 2) v
                    ON v.evenement = k.evenement AND v.modelebillet = k.modelebillet
-            WHERE (:eventId IS NULL OR e.reference = :eventId)
+            WHERE (CAST(:eventId AS integer) IS NULL OR e.reference = CAST(:eventId AS integer))
             ORDER BY e.ddate, m.modele
             """, nativeQuery = true)
     List<AvailabilityProjection> availability(@Param("eventId") Integer eventId);
 
-    /**
-     * Feature 2 — page of entries for one (event, model), optionally filtered by
-     * assignment status. {@code status}:
-     *   'pending'  -> only entries with NO name yet (affectee_a IS NULL),
-     *   'affected' -> only entries already assigned (affectee_a IS NOT NULL),
-     *   'all'      -> both.
-     */
+
     @Query(value = """
             SELECT type AS "type", numeroserie AS "numeroserie", codebarre AS "codebarre",
                    holderName AS "holderName", affecteeA AS "affecteeA", printedAt AS "printedAt"
@@ -49,18 +43,18 @@ public interface BadgeRepository extends Repository<Tturnstile, Integer> {
               FROM billet b
               LEFT JOIN holder h ON h.billet = b.numeroserie
               LEFT JOIN badge_affectation ba ON ba.numeroserie = b.numeroserie
-              WHERE b.evenement = :eventId AND b.modelebillet = :modelId
+              WHERE b.evenement = CAST(:eventId AS integer) AND b.modelebillet = :modelId
               UNION ALL
               SELECT 'VOUCHER', v.numeroserie, v.codebarre, NULL, ba.affectee_a, ba.printed_at
               FROM voucher v
               LEFT JOIN badge_affectation ba ON ba.numeroserie = v.numeroserie
-              WHERE v.evenement = :eventId AND v.modelebillet = :modelId
+              WHERE v.evenement = CAST(:eventId AS integer) AND v.modelebillet = :modelId
             ) x
-            WHERE (:search IS NULL
-                   OR x.numeroserie ILIKE concat('%', :search, '%')
-                   OR x.codebarre ILIKE concat('%', :search, '%')
-                   OR x.holderName ILIKE concat('%', :search, '%')
-                   OR x.affecteeA ILIKE concat('%', :search, '%'))
+            WHERE (CAST(:search AS text) IS NULL
+                   OR x.numeroserie ILIKE concat('%', CAST(:search AS text), '%')
+                   OR x.codebarre ILIKE concat('%', CAST(:search AS text), '%')
+                   OR x.holderName ILIKE concat('%', CAST(:search AS text), '%')
+                   OR x.affecteeA ILIKE concat('%', CAST(:search AS text), '%'))
               AND (:status = 'all'
                    OR (:status = 'affected' AND x.affecteeA IS NOT NULL)
                    OR (:status = 'pending'  AND x.affecteeA IS NULL))
@@ -82,18 +76,18 @@ public interface BadgeRepository extends Repository<Tturnstile, Integer> {
               FROM billet b
               LEFT JOIN holder h ON h.billet = b.numeroserie
               LEFT JOIN badge_affectation ba ON ba.numeroserie = b.numeroserie
-              WHERE b.evenement = :eventId AND b.modelebillet = :modelId
+              WHERE b.evenement = CAST(:eventId AS integer) AND b.modelebillet = :modelId
               UNION ALL
               SELECT v.numeroserie, v.codebarre, NULL, ba.affectee_a
               FROM voucher v
               LEFT JOIN badge_affectation ba ON ba.numeroserie = v.numeroserie
-              WHERE v.evenement = :eventId AND v.modelebillet = :modelId
+              WHERE v.evenement = CAST(:eventId AS integer) AND v.modelebillet = :modelId
             ) x
-            WHERE (:search IS NULL
-                   OR x.numeroserie ILIKE concat('%', :search, '%')
-                   OR x.codebarre ILIKE concat('%', :search, '%')
-                   OR x.holderName ILIKE concat('%', :search, '%')
-                   OR x.affecteeA ILIKE concat('%', :search, '%'))
+            WHERE (CAST(:search AS text) IS NULL
+                   OR x.numeroserie ILIKE concat('%', CAST(:search AS text), '%')
+                   OR x.codebarre ILIKE concat('%', CAST(:search AS text), '%')
+                   OR x.holderName ILIKE concat('%', CAST(:search AS text), '%')
+                   OR x.affecteeA ILIKE concat('%', CAST(:search AS text), '%'))
               AND (:status = 'all'
                    OR (:status = 'affected' AND x.affecteeA IS NOT NULL)
                    OR (:status = 'pending'  AND x.affecteeA IS NULL))
@@ -103,11 +97,7 @@ public interface BadgeRepository extends Repository<Tturnstile, Integer> {
                     @Param("search") String search,
                     @Param("status") String status);
 
-    /**
-     * Feature 2 — affected / pending / total counts for one (event, model).
-     * Counts the full population (search-independent) so the header counter is
-     * a stable "X affectées / Y restantes".
-     */
+
     @Query(value = """
             SELECT count(*) FILTER (WHERE x.affecteeA IS NOT NULL) AS "affected",
                    count(*) FILTER (WHERE x.affecteeA IS NULL)     AS "pending",
@@ -116,12 +106,12 @@ public interface BadgeRepository extends Repository<Tturnstile, Integer> {
               SELECT ba.affectee_a AS affecteeA
               FROM billet b
               LEFT JOIN badge_affectation ba ON ba.numeroserie = b.numeroserie
-              WHERE b.evenement = :eventId AND b.modelebillet = :modelId
+              WHERE b.evenement = CAST(:eventId AS integer) AND b.modelebillet = :modelId
               UNION ALL
               SELECT ba.affectee_a
               FROM voucher v
               LEFT JOIN badge_affectation ba ON ba.numeroserie = v.numeroserie
-              WHERE v.evenement = :eventId AND v.modelebillet = :modelId
+              WHERE v.evenement = CAST(:eventId AS integer) AND v.modelebillet = :modelId
             ) x
             """, nativeQuery = true)
     CountsProjection counts(@Param("eventId") int eventId, @Param("modelId") int modelId);
@@ -133,12 +123,12 @@ public interface BadgeRepository extends Repository<Tturnstile, Integer> {
             FROM billet b
             LEFT JOIN holder h ON h.billet = b.numeroserie
             LEFT JOIN badge_affectation ba ON ba.numeroserie = b.numeroserie
-            WHERE b.evenement = :eventId AND b.modelebillet = :modelId
+            WHERE b.evenement = CAST(:eventId AS integer) AND b.modelebillet = :modelId
             UNION ALL
             SELECT 'VOUCHER', v.numeroserie, v.codebarre, NULL, ba.affectee_a, ba.printed_at
             FROM voucher v
             LEFT JOIN badge_affectation ba ON ba.numeroserie = v.numeroserie
-            WHERE v.evenement = :eventId AND v.modelebillet = :modelId
+            WHERE v.evenement = CAST(:eventId AS integer) AND v.modelebillet = :modelId
             ORDER BY 2
             """, nativeQuery = true)
     List<BadgeItemProjection> allItems(@Param("eventId") int eventId, @Param("modelId") int modelId);

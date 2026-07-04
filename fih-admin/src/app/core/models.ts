@@ -143,7 +143,7 @@ export interface BilletSearchRow {
 export interface VoucherSearchRow {
   eventTitle: string; modelName: string; numeroserie: string; codebarre: string;
   utilisation: boolean; vendu: boolean; activation: boolean; reservation: boolean;
-  commande: string | null;
+  commande: number | null;
 }
 /** One access-log line (Public via tturnstile, VIP via vipaccess). */
 export interface AccessLog {

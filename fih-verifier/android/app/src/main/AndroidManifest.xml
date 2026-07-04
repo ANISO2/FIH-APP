@@ -1,8 +1,27 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- ============================ PERMISSIONS ============================ -->
+    <!-- INTERNET: the app talks to fih-companion-api over HTTP via Dio (see
+         core/network/dio_client.dart). This was previously declared ONLY in the
+         debug/profile manifests, so RELEASE builds shipped WITHOUT it and every
+         API call silently failed. Declared here so it applies to every build type. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+
+    <!-- CAMERA: required by mobile_scanner (CameraX / ML Kit) to read the QR /
+         barcodes at the gate (see verification/.../scanner_page.dart). -->
+    <uses-permission android:name="android.permission.CAMERA"/>
+
+    <!-- Declaring CAMERA makes Google Play implicitly treat a camera (and
+         autofocus) as REQUIRED hardware, filtering out devices that lack them.
+         The gate scanner works fine on fixed-focus sensors, so we mark these
+         optional to keep the app installable on the widest range of devices. -->
+    <uses-feature android:name="android.hardware.camera" android:required="false"/>
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false"/>
+
     <application
-        android:label="fih_verifier"
+        android:label="FIH Verifier"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:networkSecurityConfig="@xml/network_security_config">
         <activity
             android:name=".MainActivity"
             android:exported="true"

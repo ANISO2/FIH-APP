@@ -2,11 +2,11 @@ package com.fih.companion.verification.admin;
 
 import com.fih.companion.domain.Billet;
 import com.fih.companion.verification.projection.BilletSearchProjection;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.Repository;
 import org.springframework.data.repository.query.Param;
+
+import java.util.List;
 
 
 public interface AdminBilletSearchRepository extends Repository<Billet, String> {
@@ -31,23 +31,41 @@ public interface AdminBilletSearchRepository extends Repository<Billet, String> 
             LEFT JOIN livreur lv     ON lv.reference = l.controlleur
             """;
 
-    @Query(value = SELECT + " WHERE b.codebarre = :value ORDER BY b.numeroserie",
-            countQuery = "SELECT count(*) FROM billet b WHERE b.codebarre = :value",
-            nativeQuery = true)
-    Page<BilletSearchProjection> searchByCodebarre(@Param("value") String value, Pageable pageable);
 
-    @Query(value = SELECT + " WHERE b.codebarre LIKE :prefix ESCAPE '\\' ORDER BY b.codebarre, b.numeroserie",
-            countQuery = "SELECT count(*) FROM billet b WHERE b.codebarre LIKE :prefix ESCAPE '\\'",
-            nativeQuery = true)
-    Page<BilletSearchProjection> searchByCodebarrePrefix(@Param("prefix") String prefix, Pageable pageable);
 
-    @Query(value = SELECT + " WHERE b.numeroserie = :value ORDER BY b.numeroserie",
-            countQuery = "SELECT count(*) FROM billet b WHERE b.numeroserie = :value",
+    @Query(value = SELECT + " WHERE b.codebarre = :value ORDER BY b.numeroserie LIMIT :size OFFSET :offset",
             nativeQuery = true)
-    Page<BilletSearchProjection> searchByNumeroserie(@Param("value") String value, Pageable pageable);
+    List<BilletSearchProjection> searchByCodebarre(@Param("value") String value,
+                                                   @Param("size") int size,
+                                                   @Param("offset") int offset);
 
-    @Query(value = SELECT + " WHERE b.numeroserie LIKE :prefix ESCAPE '\\' ORDER BY b.numeroserie",
-            countQuery = "SELECT count(*) FROM billet b WHERE b.numeroserie LIKE :prefix ESCAPE '\\'",
+    @Query(value = "SELECT count(*) FROM billet b WHERE b.codebarre = :value", nativeQuery = true)
+    long countByCodebarre(@Param("value") String value);
+
+    @Query(value = SELECT + " WHERE b.codebarre LIKE :prefix ESCAPE '\\' ORDER BY b.codebarre, b.numeroserie LIMIT :size OFFSET :offset",
             nativeQuery = true)
-    Page<BilletSearchProjection> searchByNumeroseriePrefix(@Param("prefix") String prefix, Pageable pageable);
+    List<BilletSearchProjection> searchByCodebarrePrefix(@Param("prefix") String prefix,
+                                                         @Param("size") int size,
+                                                         @Param("offset") int offset);
+
+    @Query(value = "SELECT count(*) FROM billet b WHERE b.codebarre LIKE :prefix ESCAPE '\\'", nativeQuery = true)
+    long countByCodebarrePrefix(@Param("prefix") String prefix);
+
+    @Query(value = SELECT + " WHERE b.numeroserie = :value ORDER BY b.numeroserie LIMIT :size OFFSET :offset",
+            nativeQuery = true)
+    List<BilletSearchProjection> searchByNumeroserie(@Param("value") String value,
+                                                     @Param("size") int size,
+                                                     @Param("offset") int offset);
+
+    @Query(value = "SELECT count(*) FROM billet b WHERE b.numeroserie = :value", nativeQuery = true)
+    long countByNumeroserie(@Param("value") String value);
+
+    @Query(value = SELECT + " WHERE b.numeroserie LIKE :prefix ESCAPE '\\' ORDER BY b.numeroserie LIMIT :size OFFSET :offset",
+            nativeQuery = true)
+    List<BilletSearchProjection> searchByNumeroseriePrefix(@Param("prefix") String prefix,
+                                                           @Param("size") int size,
+                                                           @Param("offset") int offset);
+
+    @Query(value = "SELECT count(*) FROM billet b WHERE b.numeroserie LIKE :prefix ESCAPE '\\'", nativeQuery = true)
+    long countByNumeroseriePrefix(@Param("prefix") String prefix);
 }

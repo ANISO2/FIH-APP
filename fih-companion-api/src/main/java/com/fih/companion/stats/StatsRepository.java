@@ -16,39 +16,39 @@ public interface StatsRepository extends Repository<Tturnstile, Integer> {
             FROM evenement
             WHERE ddate IS NOT NULL
               AND extract(year FROM ddate) > 2000
-            ORDER BY yr DESC
+            ORDER BY yr DESC	
             """, nativeQuery = true)
     List<Integer> availableYears();
 
     @Query(value = """
             SELECT
               (SELECT count(*) FROM evenement e
-                 WHERE (:year IS NULL OR extract(year FROM e.ddate) = :year))            AS "totalEvents",
+                 WHERE (CAST(:year AS integer) IS NULL OR extract(year FROM e.ddate) = CAST(:year AS integer)))            AS "totalEvents",
               (SELECT count(*) FROM billet b
-                 WHERE (:year IS NULL OR b.evenement IN
-                        (SELECT reference FROM evenement WHERE extract(year FROM ddate) = :year))) AS "totalBillets",
+                 WHERE (CAST(:year AS integer) IS NULL OR b.evenement IN
+                        (SELECT reference FROM evenement WHERE extract(year FROM ddate) = CAST(:year AS integer)))) AS "totalBillets",
               (SELECT count(*) FROM voucher v
-                 WHERE (:year IS NULL OR v.evenement IN
-                        (SELECT reference FROM evenement WHERE extract(year FROM ddate) = :year))) AS "totalVouchers",
+                 WHERE (CAST(:year AS integer) IS NULL OR v.evenement IN
+                        (SELECT reference FROM evenement WHERE extract(year FROM ddate) = CAST(:year AS integer)))) AS "totalVouchers",
               (SELECT count(*) FROM tturnstile t
-                 WHERE (:year IS NULL OR t.datetransaction IN
-                        (SELECT ddate FROM evenement WHERE extract(year FROM ddate) = :year)))     AS "totalScans",
+                 WHERE (CAST(:year AS integer) IS NULL OR t.datetransaction IN
+                        (SELECT ddate FROM evenement WHERE extract(year FROM ddate) = CAST(:year AS integer))))     AS "totalScans",
               (SELECT count(*) FROM tturnstile t
                  WHERE transactionstate IS TRUE
-                   AND (:year IS NULL OR t.datetransaction IN
-                        (SELECT ddate FROM evenement WHERE extract(year FROM ddate) = :year)))     AS "acceptedScans",
+                   AND (CAST(:year AS integer) IS NULL OR t.datetransaction IN
+                        (SELECT ddate FROM evenement WHERE extract(year FROM ddate) = CAST(:year AS integer))))     AS "acceptedScans",
               (SELECT count(*) FROM tturnstile t
                  WHERE transactionstate IS NOT TRUE
-                   AND (:year IS NULL OR t.datetransaction IN
-                        (SELECT ddate FROM evenement WHERE extract(year FROM ddate) = :year)))     AS "rejectedScans",
+                   AND (CAST(:year AS integer) IS NULL OR t.datetransaction IN
+                        (SELECT ddate FROM evenement WHERE extract(year FROM ddate) = CAST(:year AS integer))))     AS "rejectedScans",
               (SELECT count(*) FROM tturnstile t
                  WHERE lower(porte) = 'public'
-                   AND (:year IS NULL OR t.datetransaction IN
-                        (SELECT ddate FROM evenement WHERE extract(year FROM ddate) = :year)))     AS "publicScans",
+                   AND (CAST(:year AS integer) IS NULL OR t.datetransaction IN
+                        (SELECT ddate FROM evenement WHERE extract(year FROM ddate) = CAST(:year AS integer))))     AS "publicScans",
               (SELECT count(*) FROM tturnstile t
                  WHERE lower(porte) = 'vip'
-                   AND (:year IS NULL OR t.datetransaction IN
-                        (SELECT ddate FROM evenement WHERE extract(year FROM ddate) = :year)))     AS "vipScans"
+                   AND (CAST(:year AS integer) IS NULL OR t.datetransaction IN
+                        (SELECT ddate FROM evenement WHERE extract(year FROM ddate) = CAST(:year AS integer))))     AS "vipScans"
             """, nativeQuery = true)
     OverviewCountsProjection overviewCounts(@Param("year") Integer year);
 
@@ -56,7 +56,7 @@ public interface StatsRepository extends Repository<Tturnstile, Integer> {
             SELECT e.titre AS "title", e.ddate AS "date", count(t.reference) AS "scans"
             FROM evenement e
             JOIN tturnstile t ON t.datetransaction = e.ddate
-            WHERE (:year IS NULL OR extract(year FROM e.ddate) = :year)
+            WHERE (CAST(:year AS integer) IS NULL OR extract(year FROM e.ddate) = CAST(:year AS integer))
             GROUP BY e.reference, e.titre, e.ddate
             ORDER BY count(t.reference) DESC
             LIMIT 1
@@ -70,7 +70,7 @@ public interface StatsRepository extends Repository<Tturnstile, Integer> {
                    count(t.reference) FILTER (WHERE t.transactionstate IS NOT TRUE) AS "rejected"
             FROM evenement e
             JOIN tturnstile t ON t.datetransaction = e.ddate
-            WHERE (:year IS NULL OR extract(year FROM e.ddate) = :year)
+            WHERE (CAST(:year AS integer) IS NULL OR extract(year FROM e.ddate) = CAST(:year AS integer))
             GROUP BY e.ddate
             ORDER BY e.ddate
             """, nativeQuery = true)
@@ -83,8 +83,8 @@ public interface StatsRepository extends Repository<Tturnstile, Integer> {
                    count(*) FILTER (WHERE transactionstate IS NOT TRUE) AS "rejected"
             FROM tturnstile t
             WHERE porte IS NOT NULL
-              AND (:year IS NULL OR t.datetransaction IN
-                   (SELECT ddate FROM evenement WHERE extract(year FROM ddate) = :year))
+              AND (CAST(:year AS integer) IS NULL OR t.datetransaction IN
+                   (SELECT ddate FROM evenement WHERE extract(year FROM ddate) = CAST(:year AS integer)))
             GROUP BY lower(porte)
             """, nativeQuery = true)
     List<GateProjection> gateBreakdown(@Param("year") Integer year);
@@ -92,19 +92,19 @@ public interface StatsRepository extends Repository<Tturnstile, Integer> {
     @Query(value = """
             SELECT
               (SELECT count(*) FROM billet b
-                 WHERE (:year IS NULL OR b.evenement IN
-                        (SELECT reference FROM evenement WHERE extract(year FROM ddate) = :year)))   AS "billetIssued",
+                 WHERE (CAST(:year AS integer) IS NULL OR b.evenement IN
+                        (SELECT reference FROM evenement WHERE extract(year FROM ddate) = CAST(:year AS integer))))   AS "billetIssued",
               (SELECT count(DISTINCT t.billet) FROM tturnstile t
                  WHERE t.billet IS NOT NULL
-                   AND (:year IS NULL OR t.datetransaction IN
-                        (SELECT ddate FROM evenement WHERE extract(year FROM ddate) = :year)))       AS "billetScanned",
+                   AND (CAST(:year AS integer) IS NULL OR t.datetransaction IN
+                        (SELECT ddate FROM evenement WHERE extract(year FROM ddate) = CAST(:year AS integer))))       AS "billetScanned",
               (SELECT count(*) FROM voucher v
-                 WHERE (:year IS NULL OR v.evenement IN
-                        (SELECT reference FROM evenement WHERE extract(year FROM ddate) = :year)))   AS "voucherIssued",
+                 WHERE (CAST(:year AS integer) IS NULL OR v.evenement IN
+                        (SELECT reference FROM evenement WHERE extract(year FROM ddate) = CAST(:year AS integer))))   AS "voucherIssued",
               (SELECT count(DISTINCT t.voucher) FROM tturnstile t
                  WHERE t.voucher IS NOT NULL
-                   AND (:year IS NULL OR t.datetransaction IN
-                        (SELECT ddate FROM evenement WHERE extract(year FROM ddate) = :year)))       AS "voucherScanned"
+                   AND (CAST(:year AS integer) IS NULL OR t.datetransaction IN
+                        (SELECT ddate FROM evenement WHERE extract(year FROM ddate) = CAST(:year AS integer))))       AS "voucherScanned"
             """, nativeQuery = true)
     TicketTypesProjection ticketTypes(@Param("year") Integer year);
 
@@ -117,7 +117,7 @@ public interface StatsRepository extends Repository<Tturnstile, Integer> {
                    count(t.reference) FILTER (WHERE lower(t.porte) = 'vip')            AS "vipScans"
             FROM evenement e
             LEFT JOIN tturnstile t ON t.datetransaction = e.ddate
-            WHERE (:year IS NULL OR extract(year FROM e.ddate) = :year)
+            WHERE (CAST(:year AS integer) IS NULL OR extract(year FROM e.ddate) = CAST(:year AS integer))
             GROUP BY e.reference, e.titre, e.ddate
             ORDER BY e.ddate
             """, nativeQuery = true)
@@ -170,7 +170,7 @@ public interface StatsRepository extends Repository<Tturnstile, Integer> {
             FROM evenement e
             JOIN generation g ON g.evenement = e.reference
             WHERE g.prix > 0
-              AND (:year IS NULL OR extract(year FROM e.ddate) = :year)
+              AND (CAST(:year AS integer) IS NULL OR extract(year FROM e.ddate) = CAST(:year AS integer))
             GROUP BY e.reference, e.titre, e.ddate
             ORDER BY "total" DESC, e.ddate
             """, nativeQuery = true)
@@ -187,7 +187,7 @@ public interface StatsRepository extends Repository<Tturnstile, Integer> {
             FROM evenement e
             JOIN generation g ON g.evenement = e.reference
             WHERE g.prix > 0
-              AND (:year IS NULL OR extract(year FROM e.ddate) = :year)
+              AND (CAST(:year AS integer) IS NULL OR extract(year FROM e.ddate) = CAST(:year AS integer))
             GROUP BY e.reference, e.titre, e.ddate
             ORDER BY "recetteTotale" DESC, e.ddate
             """, nativeQuery = true)
@@ -215,7 +215,7 @@ public interface StatsRepository extends Repository<Tturnstile, Integer> {
     // -------------------------------------------------------- Recette par guichet
 
 
-     @Query(value = """
+    @Query(value = """
             SELECT e.reference AS "eventId", e.titre AS "eventTitle", e.ddate AS "eventDate",
                    COALESCE(vb.recette, 0) AS "billet",
                    COALESCE(kk.recette, 0) AS "kit",
@@ -227,13 +227,13 @@ public interface StatsRepository extends Repository<Tturnstile, Integer> {
             LEFT JOIN (SELECT dk.evenement, SUM(k.montantnet) AS recette
                        FROM detailkit dk JOIN kit k ON k.id = dk.kit
                        GROUP BY dk.evenement) kk ON kk.evenement = e.reference
-            WHERE (:year IS NULL OR extract(year FROM e.ddate) = :year)
+            WHERE (CAST(:year AS integer) IS NULL OR extract(year FROM e.ddate) = CAST(:year AS integer))
               AND (vb.recette IS NOT NULL OR kk.recette IS NOT NULL)
             ORDER BY "total" DESC, e.ddate
             """, nativeQuery = true)
     List<RecetteGuichetSummaryProjection> recetteGuichetSummary(@Param("year") Integer year);
 
-     @Query(value = """
+    @Query(value = """
             SELECT e.reference AS "eventId", e.titre AS "eventTitle", e.ddate AS "eventDate",
                    m.reference AS "modelId", m.modele AS "modelName",
                    COALESCE(l.livraison, 0)    AS "billetLivraison",
@@ -260,7 +260,7 @@ public interface StatsRepository extends Repository<Tturnstile, Integer> {
                        FROM detailkit dk JOIN kit k ON k.id = dk.kit
                        GROUP BY dk.evenement, dk.modelebillet) k
                    ON k.evenement = km.evenement AND k.modelebillet = km.modelebillet
-            WHERE (:year IS NULL OR extract(year FROM e.ddate) = :year)
+            WHERE (CAST(:year AS integer) IS NULL OR extract(year FROM e.ddate) = CAST(:year AS integer))
             ORDER BY e.ddate, e.titre, m.modele
             """, nativeQuery = true)
     List<RecetteGuichetDetailProjection> recetteGuichetDetail(@Param("year") Integer year);
@@ -297,7 +297,7 @@ public interface StatsRepository extends Repository<Tturnstile, Integer> {
             FULL OUTER JOIN tx t ON t.evenement = c.evenement AND t.modelebillet = c.modelebillet
             JOIN evenement e ON e.reference = COALESCE(c.evenement, t.evenement)
             JOIN modelebillet m ON m.reference = COALESCE(c.modelebillet, t.modelebillet)
-            WHERE (:year IS NULL OR extract(year FROM e.ddate) = :year)
+            WHERE (CAST(:year AS integer) IS NULL OR extract(year FROM e.ddate) = CAST(:year AS integer))
             ORDER BY e.ddate, e.titre, m.modele
             """, nativeQuery = true)
     List<TourniquetProjection> tourniquets(@Param("year") Integer year);
@@ -311,7 +311,7 @@ public interface StatsRepository extends Repository<Tturnstile, Integer> {
             LEFT JOIN billet b  ON b.numeroserie = t.billet
             LEFT JOIN voucher v ON v.numeroserie = t.voucher
             LEFT JOIN evenement e ON e.reference = COALESCE(b.evenement, v.evenement)
-            WHERE (:year IS NULL OR extract(year FROM e.ddate) = :year)
+            WHERE (CAST(:year AS integer) IS NULL OR extract(year FROM e.ddate) = CAST(:year AS integer))
             """, nativeQuery = true)
     RejetKpiProjection rejetsKpi(@Param("year") Integer year);
 
@@ -327,7 +327,7 @@ public interface StatsRepository extends Repository<Tturnstile, Integer> {
             LEFT JOIN billet b  ON b.numeroserie = t.billet
             LEFT JOIN voucher v ON v.numeroserie = t.voucher
             LEFT JOIN evenement e ON e.reference = COALESCE(b.evenement, v.evenement)
-            WHERE t.transactionstate = false AND (:year IS NULL OR extract(year FROM e.ddate) = :year)
+            WHERE t.transactionstate = false AND (CAST(:year AS integer) IS NULL OR extract(year FROM e.ddate) = CAST(:year AS integer))
             GROUP BY 1 ORDER BY 2 DESC
             """, nativeQuery = true)
     List<RejetGroupProjection> rejetsParCategorie(@Param("year") Integer year);
@@ -343,7 +343,7 @@ public interface StatsRepository extends Repository<Tturnstile, Integer> {
             LEFT JOIN billet b  ON b.numeroserie = t.billet
             LEFT JOIN voucher v ON v.numeroserie = t.voucher
             LEFT JOIN evenement e ON e.reference = COALESCE(b.evenement, v.evenement)
-            WHERE t.transactionstate = false AND (:year IS NULL OR extract(year FROM e.ddate) = :year)
+            WHERE t.transactionstate = false AND (CAST(:year AS integer) IS NULL OR extract(year FROM e.ddate) = CAST(:year AS integer))
             GROUP BY 1 ORDER BY 2 DESC
             """, nativeQuery = true)
     List<RejetGroupProjection> rejetsParPorte(@Param("year") Integer year);
@@ -354,7 +354,7 @@ public interface StatsRepository extends Repository<Tturnstile, Integer> {
             LEFT JOIN billet b  ON b.numeroserie = t.billet
             LEFT JOIN voucher v ON v.numeroserie = t.voucher
             JOIN evenement e ON e.reference = COALESCE(b.evenement, v.evenement)
-            WHERE t.transactionstate = false AND (:year IS NULL OR extract(year FROM e.ddate) = :year)
+            WHERE t.transactionstate = false AND (CAST(:year AS integer) IS NULL OR extract(year FROM e.ddate) = CAST(:year AS integer))
             GROUP BY e.reference, e.titre, e.ddate ORDER BY count(*) DESC
             """, nativeQuery = true)
     List<RejetEvenementProjection> rejetsParEvenement(@Param("year") Integer year);
@@ -366,7 +366,7 @@ public interface StatsRepository extends Repository<Tturnstile, Integer> {
             LEFT JOIN voucher v ON v.numeroserie = t.voucher
             JOIN evenement e ON e.reference = COALESCE(b.evenement, v.evenement)
             JOIN modelebillet m ON m.reference = COALESCE(b.modelebillet, v.modelebillet)
-            WHERE t.transactionstate = false AND (:year IS NULL OR extract(year FROM e.ddate) = :year)
+            WHERE t.transactionstate = false AND (CAST(:year AS integer) IS NULL OR extract(year FROM e.ddate) = CAST(:year AS integer))
             GROUP BY m.reference, m.modele ORDER BY count(*) DESC
             """, nativeQuery = true)
     List<RejetModeleProjection> rejetsParModele(@Param("year") Integer year);
@@ -377,7 +377,7 @@ public interface StatsRepository extends Repository<Tturnstile, Integer> {
             LEFT JOIN billet b  ON b.numeroserie = t.billet
             LEFT JOIN voucher v ON v.numeroserie = t.voucher
             LEFT JOIN evenement e ON e.reference = COALESCE(b.evenement, v.evenement)
-            WHERE t.transactionstate = false AND (:year IS NULL OR extract(year FROM e.ddate) = :year)
+            WHERE t.transactionstate = false AND (CAST(:year AS integer) IS NULL OR extract(year FROM e.ddate) = CAST(:year AS integer))
               AND t.datetransaction IS NOT NULL
             GROUP BY t.datetransaction ORDER BY t.datetransaction
             """, nativeQuery = true)
@@ -390,7 +390,7 @@ public interface StatsRepository extends Repository<Tturnstile, Integer> {
             LEFT JOIN billet b  ON b.numeroserie = t.billet
             LEFT JOIN voucher v ON v.numeroserie = t.voucher
             LEFT JOIN evenement e ON e.reference = COALESCE(b.evenement, v.evenement)
-            WHERE t.transactionstate = false AND (:year IS NULL OR extract(year FROM e.ddate) = :year)
+            WHERE t.transactionstate = false AND (CAST(:year AS integer) IS NULL OR extract(year FROM e.ddate) = CAST(:year AS integer))
             ORDER BY t.heuretransaction DESC NULLS LAST
             LIMIT 2000
             """, nativeQuery = true)

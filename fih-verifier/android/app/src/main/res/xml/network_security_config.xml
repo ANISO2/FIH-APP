@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The backend is reached over PLAIN HTTP on the venue LAN (e.g.
+  http://192.168.x.x:8080 / http://10.0.2.2:8080), and the base URL is
+  operator-editable at runtime (Reglages -> API), so it can point at ANY LAN IP.
+
+  Android 9+ (API 28+) blocks cleartext HTTP by DEFAULT in release builds, which
+  would make the app appear permanently "offline" at the gate even though Wi-Fi
+  is fine. We therefore permit cleartext globally.
+
+  If the backend is ever moved behind HTTPS, tighten this: drop the global
+  permit and add a <domain-config cleartextTrafficPermitted="false"> per host,
+  or remove this file and the manifest reference entirely.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system"/>
+        </trust-anchors>
+    </base-config>
+</network-security-config>

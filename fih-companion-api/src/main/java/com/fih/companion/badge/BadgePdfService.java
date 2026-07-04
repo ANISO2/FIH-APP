@@ -20,32 +20,14 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.text.Normalizer;
 import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
-/**
- * Builds the festival e-ticket PDF with OpenPDF.
- *
- * Layout (landscape, 220 x 100 mm by default — see fih.badge.ticket-*-mm),
- * matching the approved "format" mock-up:
- *
- *   0 .. 100 mm   event poster, cover-fitted (no distortion); the poster art
- *                 already carries the sponsor strip, so the "ads" stay legible.
- *   100 .. 188 mm royal-blue info panel: holder name (white) on top of three
- *                 stacked white rounded cards — date, time, and a large QR card.
- *   ~150 mm       vertical perforation (dashed white line + punch notches) that
- *                 separates the tear-off stub.
- *   150 .. 188 mm stub: the event title set vertically in white.
- *   188 .. 220 mm white strip: the rotated
- *                 "présenter au contrôle d'accès" instruction.
- *
- * Everything is drawn with absolute coordinates on a single {@link PdfContentByte}
- * via {@link #drawTicket}, so the same renderer composes a full-page ticket
- * or a multi-page batch. We write only to an output
- * stream — never the DB.
- */
+
 @Service
 public class BadgePdfService {
 
@@ -102,34 +84,61 @@ public class BadgePdfService {
         return os.toByteArray();
     }
 
-    /** Multi-page PDF, one ticket per page. */
-    public byte[] batchSingle(List<BadgeRecord> recs) {
-        ByteArrayOutputStream os = new ByteArrayOutputStream();
-        Document doc = new Document(ticketPage(), 0, 0, 0, 0);
-        PdfWriter writer = PdfWriter.getInstance(doc, os);
-        doc.open();
-        for (int i = 0; i < recs.size(); i++) {
-            if (i > 0) doc.newPage();
-            Rectangle p = doc.getPageSize();
-            drawTicket(writer.getDirectContent(), writer, recs.get(i), 0, 0, p.getWidth(), p.getHeight());
-        }
-        doc.close();
-        return os.toByteArray();
-    }
 
-    /** ZIP of one-page PDFs, used for very large batches. */
-    public byte[] batchZip(List<BadgeRecord> recs) {
+    public byte[] batchZipPerAffectee(List<BadgeRecord> recs) {
         ByteArrayOutputStream os = new ByteArrayOutputStream();
+        Map<String, Integer> used = new HashMap<>();
         try (ZipOutputStream zip = new ZipOutputStream(os)) {
             for (BadgeRecord rec : recs) {
-                zip.putNextEntry(new ZipEntry("billet_" + rec.codebarre() + ".pdf"));
+                String entry = uniqueEntryName(fileBaseName(rec), rec, used);
+                zip.putNextEntry(new ZipEntry(entry));
                 zip.write(single(rec));
                 zip.closeEntry();
             }
         } catch (Exception e) {
-            throw new RuntimeException("Failed to build ticket ZIP", e);
+            throw new RuntimeException("Failed to build badge ZIP", e);
         }
         return os.toByteArray();
+    }
+
+    /** Base file name (no extension) for one invitation: affecteeA -> holder -> SANS-NOM_code. */
+    private String fileBaseName(BadgeRecord rec) {
+        if (rec.affecteeA() != null && !rec.affecteeA().isBlank()) {
+            return sanitizeFilename(rec.affecteeA());
+        }
+        if (rec.holderName() != null && !rec.holderName().isBlank()) {
+            return sanitizeFilename(rec.holderName());
+        }
+        String code = (rec.codebarre() != null && !rec.codebarre().isBlank())
+                ? rec.codebarre() : rec.numeroserie();
+        return "SANS-NOM_" + sanitizeFilename(code);
+    }
+
+    /** Ensure ZIP entry names are unique (case-insensitively) within one archive. */
+    private String uniqueEntryName(String base, BadgeRecord rec, Map<String, Integer> used) {
+        String candidate = base + ".pdf";
+        if (used.putIfAbsent(candidate.toLowerCase(Locale.ROOT), 1) == null) {
+            return candidate;
+        }
+        String withSerial = base + "_" + sanitizeFilename(rec.numeroserie()) + ".pdf";
+        if (used.putIfAbsent(withSerial.toLowerCase(Locale.ROOT), 1) == null) {
+            return withSerial;
+        }
+        int n = used.merge(withSerial.toLowerCase(Locale.ROOT), 1, Integer::sum);
+        return base + "_" + sanitizeFilename(rec.numeroserie()) + "_" + n + ".pdf";
+    }
+
+
+    private String sanitizeFilename(String s) {
+        if (s == null) return "badge";
+        String folded = Normalizer.normalize(s, Normalizer.Form.NFD)
+                .replaceAll("\\p{M}+", "")                 // drop diacritics
+                .replace(' ', '_')
+                .replaceAll("[^a-zA-Z0-9._-]+", "-")       // unsafe -> dash
+                .replaceAll("[-_]{2,}", "_")               // collapse repeats
+                .replaceAll("(^[._-]+|[._-]+$)", "");      // trim separators
+        if (folded.isBlank()) return "badge";
+        return folded.length() > 120 ? folded.substring(0, 120) : folded;
     }
 
     public int zipThreshold() {
@@ -137,11 +146,7 @@ public class BadgePdfService {
     }
 
     // ------------------------------------------------------ one ticket drawing
-    /**
-     * Draws a complete ticket inside the box (x0,y0,w,h). The box is expected to
-     * keep the 2.2:1 aspect; all internal positions are expressed in the logical
-     * 220x100 mm space and scaled by {@code s}.
-     */
+
     private void drawTicket(PdfContentByte cb, PdfWriter writer, BadgeRecord rec,
                             float x0, float y0, float w, float h) {
         final float s = w / (T_W * MM);   // points-per-(logical mm*MM); 1.0 at full size

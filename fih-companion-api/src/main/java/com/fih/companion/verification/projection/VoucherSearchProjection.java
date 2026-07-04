@@ -10,5 +10,5 @@ public interface VoucherSearchProjection {
     Boolean getVendu();        // Vente
     Boolean getActivation();   // Activé
     Boolean getReservation();
-    String getCommande();      // voucherorder.code
+    Integer getCommande();   // voucherorder.code (integer in DB)
 }

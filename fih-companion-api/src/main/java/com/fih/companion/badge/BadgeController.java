@@ -13,7 +13,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.util.ArrayList;
 import java.util.List;
 
 
@@ -52,7 +51,7 @@ public class BadgeController {
         return query.items(eventId, modelId, page, size, search, status);
     }
 
-     @GetMapping("/counts")
+    @GetMapping("/counts")
     public com.fih.companion.badge.dto.CountsDto counts(@RequestParam int eventId,
                                                         @RequestParam int modelId) {
         return query.counts(eventId, modelId);
@@ -79,34 +78,22 @@ public class BadgeController {
         if (req.eventId() == null || req.modelId() == null) {
             return ResponseEntity.badRequest().build();
         }
+         // invitation (each keeping the existing single-ticket design), bundled
+        // into a single ZIP. Every PDF is named after that invitation's
+        // "Affect\u00e9 \u00e0" value; invitations without a name are NOT skipped —
+        // they fall back to a clearly-marked "SANS-NOM_<code>" file name.
         List<BadgeRecord> all = query.batch(req.eventId(), req.modelId(), req.codes());
+        // query.batch(...) already throws 404 when the selection resolves to no
+        // records, so `all` is non-empty here.
 
+        String base = "badges_" + sanitize(all.get(0).eventTitle())
+                + "_" + sanitize(all.get(0).modelName());
 
-        List<BadgeRecord> printable = new ArrayList<>();
-        List<String> skipped = new ArrayList<>();
-        for (BadgeRecord r : all) {
-            if (isUnaffected(r)) skipped.add(r.numeroserie());
-            else printable.add(r);
-        }
-        if (printable.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
-                    "Aucune invitation affect\u00e9e dans la s\u00e9lection. "
-                            + "Affectez un nom avant de g\u00e9n\u00e9rer le PDF.");
-        }
-
-        String base = "badges_" + sanitize(printable.get(0).eventTitle())
-                + "_" + sanitize(printable.get(0).modelName());
-
-        ResponseEntity<byte[]> response;
-        if (printable.size() > pdf.zipThreshold()) {
-            response = pdfResponse(pdf.batchZip(printable), base + ".zip",
-                    MediaType.parseMediaType("application/zip"), skipped);
-        } else {
-            response = pdfResponse(pdf.batchSingle(printable), base + ".pdf",
-                    MediaType.APPLICATION_PDF, skipped);
-        }
-        affectee.markPrinted(printable.stream().map(BadgeRecord::numeroserie).toList());
-        return response;
+        byte[] zip = pdf.batchZipPerAffectee(all);
+        // Only affected invitations own a badge_affectation row, so markPrinted
+        // stamps printed_at for those; unaffected serials are a no-op update.
+        affectee.markPrinted(all.stream().map(BadgeRecord::numeroserie).toList());
+        return pdfResponse(zip, base + ".zip", MediaType.parseMediaType("application/zip"), null);
     }
 
     private boolean isUnaffected(BadgeRecord rec) {

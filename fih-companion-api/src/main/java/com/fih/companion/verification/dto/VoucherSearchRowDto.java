@@ -1,6 +1,6 @@
 package com.fih.companion.verification.dto;
 
- public record VoucherSearchRowDto(
+public record VoucherSearchRowDto(
         String eventTitle,
         String modelName,
         String numeroserie,
@@ -9,6 +9,6 @@ package com.fih.companion.verification.dto;
         boolean vendu,
         boolean activation,
         boolean reservation,
-        String commande
+        Integer commande
 ) {
 }

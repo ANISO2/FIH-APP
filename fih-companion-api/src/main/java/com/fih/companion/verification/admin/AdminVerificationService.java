@@ -12,9 +12,6 @@ import com.fih.companion.verification.dto.VoucherSearchRowDto;
 import com.fih.companion.verification.projection.AccessLogProjection;
 import com.fih.companion.verification.projection.BilletSearchProjection;
 import com.fih.companion.verification.projection.VoucherSearchProjection;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -49,21 +46,35 @@ public class AdminVerificationService {
     // -------------------------------------------------------------- BILLET
     public PageDto<BilletSearchRowDto> searchBillets(String value, String field, String mode, int page, int size) {
         String v = value == null ? "" : value.trim();
-        Pageable pageable = pageable(page, size);
-        Page<BilletSearchProjection> result;
         if (v.isEmpty()) {
             return empty(page, size);
         }
+        int p = Math.max(page, 0);
+        int s = pageSize(size);
+        int offset = p * s;
+
+        long total;
+        List<BilletSearchProjection> rows;
         if (numeroserie(field)) {
-            result = prefix(mode)
-                    ? billetSearch.searchByNumeroseriePrefix(like(v), pageable)
-                    : billetSearch.searchByNumeroserie(v, pageable);
+            if (prefix(mode)) {
+                String like = like(v);
+                total = billetSearch.countByNumeroseriePrefix(like);
+                rows = billetSearch.searchByNumeroseriePrefix(like, s, offset);
+            } else {
+                total = billetSearch.countByNumeroserie(v);
+                rows = billetSearch.searchByNumeroserie(v, s, offset);
+            }
         } else {
-            result = prefix(mode)
-                    ? billetSearch.searchByCodebarrePrefix(like(v), pageable)
-                    : billetSearch.searchByCodebarre(v, pageable);
+            if (prefix(mode)) {
+                String like = like(v);
+                total = billetSearch.countByCodebarrePrefix(like);
+                rows = billetSearch.searchByCodebarrePrefix(like, s, offset);
+            } else {
+                total = billetSearch.countByCodebarre(v);
+                rows = billetSearch.searchByCodebarre(v, s, offset);
+            }
         }
-        return toPage(result.map(this::toBilletRow));
+        return page(rows.stream().map(this::toBilletRow).toList(), p, s, total);
     }
 
     public AdminTicketDetailsDto billetDetails(String numeroserie) {
@@ -76,21 +87,35 @@ public class AdminVerificationService {
     // ------------------------------------------------------------- VOUCHER
     public PageDto<VoucherSearchRowDto> searchVouchers(String value, String field, String mode, int page, int size) {
         String v = value == null ? "" : value.trim();
-        Pageable pageable = pageable(page, size);
-        Page<VoucherSearchProjection> result;
         if (v.isEmpty()) {
             return empty(page, size);
         }
+        int p = Math.max(page, 0);
+        int s = pageSize(size);
+        int offset = p * s;
+
+        long total;
+        List<VoucherSearchProjection> rows;
         if (numeroserie(field)) {
-            result = prefix(mode)
-                    ? voucherSearch.searchByNumeroseriePrefix(like(v), pageable)
-                    : voucherSearch.searchByNumeroserie(v, pageable);
+            if (prefix(mode)) {
+                String like = like(v);
+                total = voucherSearch.countByNumeroseriePrefix(like);
+                rows = voucherSearch.searchByNumeroseriePrefix(like, s, offset);
+            } else {
+                total = voucherSearch.countByNumeroserie(v);
+                rows = voucherSearch.searchByNumeroserie(v, s, offset);
+            }
         } else {
-            result = prefix(mode)
-                    ? voucherSearch.searchByCodebarrePrefix(like(v), pageable)
-                    : voucherSearch.searchByCodebarre(v, pageable);
+            if (prefix(mode)) {
+                String like = like(v);
+                total = voucherSearch.countByCodebarrePrefix(like);
+                rows = voucherSearch.searchByCodebarrePrefix(like, s, offset);
+            } else {
+                total = voucherSearch.countByCodebarre(v);
+                rows = voucherSearch.searchByCodebarre(v, s, offset);
+            }
         }
-        return toPage(result.map(this::toVoucherRow));
+        return page(rows.stream().map(this::toVoucherRow).toList(), p, s, total);
     }
 
     public AdminTicketDetailsDto voucherDetails(String numeroserie) {
@@ -109,7 +134,7 @@ public class AdminVerificationService {
         return "prefix".equalsIgnoreCase(mode);
     }
 
-     private String like(String value) {
+    private String like(String value) {
         String escaped = value
                 .replace("\\", "\\\\")
                 .replace("%", "\\%")
@@ -117,10 +142,8 @@ public class AdminVerificationService {
         return escaped + "%";
     }
 
-    private Pageable pageable(int page, int size) {
-        int p = Math.max(page, 0);
-        int s = size <= 0 ? DEFAULT_PAGE_SIZE : Math.min(size, MAX_PAGE_SIZE);
-        return PageRequest.of(p, s);
+    private int pageSize(int size) {
+        return size <= 0 ? DEFAULT_PAGE_SIZE : Math.min(size, MAX_PAGE_SIZE);
     }
 
     private BilletSearchRowDto toBilletRow(BilletSearchProjection p) {
@@ -165,13 +188,13 @@ public class AdminVerificationService {
                 .toList();
     }
 
-    private <T> PageDto<T> toPage(Page<T> page) {
-        return new PageDto<>(page.getContent(), page.getNumber(), page.getSize(),
-                page.getTotalElements(), page.getTotalPages());
+    private <T> PageDto<T> page(List<T> content, int page, int size, long total) {
+        int totalPages = size <= 0 ? 0 : (int) Math.ceil((double) total / size);
+        return new PageDto<>(content, page, size, total, totalPages);
     }
 
     private <T> PageDto<T> empty(int page, int size) {
-        int s = size <= 0 ? DEFAULT_PAGE_SIZE : Math.min(size, MAX_PAGE_SIZE);
+        int s = pageSize(size);
         return new PageDto<>(List.of(), Math.max(page, 0), s, 0, 0);
     }
 }
