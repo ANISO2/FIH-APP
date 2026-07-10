@@ -5,7 +5,7 @@ import { BadgeService } from '../core/badge.service';
 import { Availability, MissingPoster } from '../core/models';
 import { LoadingSkeletonComponent } from '../shared/loading-skeleton.component';
 import { EmptyStateComponent } from '../shared/empty-state.component';
-import { NumPipe, FDatePipe, realDate } from '../shared/format';
+import { NumPipe, GDatePipe } from '../shared/format';
 
 interface EventGroup {
   eventId: number; eventTitle: string; eventDate: string; hasPoster: boolean; rows: Availability[];
@@ -14,14 +14,14 @@ interface EventGroup {
 @Component({
   selector: 'app-badges',
   standalone: true,
-  imports: [FormsModule, LoadingSkeletonComponent, EmptyStateComponent, NumPipe, FDatePipe],
+  imports: [FormsModule, LoadingSkeletonComponent, EmptyStateComponent, NumPipe, GDatePipe],
   template: `
     <h2 class="text-xl font-bold text-ink mb-4">Invitations &amp; Badges</h2>
 
     @if (loading()) {
       <app-loading-skeleton [height]="360" />
     } @else if (error()) {
-      <app-empty-state [error]="true" title="Impossible de charger la disponibilité" message="Le backend est-il démarré ?" />
+      <app-empty-state [error]="true" title="Impossible de charger la disponibilité" message="Le serveur est peut-être indisponible." />
     } @else {
       <!-- Bandeau récapitulatif -->
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
@@ -88,7 +88,7 @@ interface EventGroup {
                   </span>
                 }
               </div>
-              <div class="text-sm text-muted">{{ g.eventDate | fdate }}</div>
+              <div class="text-sm text-muted">{{ g.eventDate | gdate }}</div>
             </div>
             <div class="overflow-x-auto">
               <table class="w-full text-sm">
@@ -173,10 +173,10 @@ export class BadgesComponent implements OnInit {
     this.loading.set(true);
     this.error.set(false);
     this.badges.availability().subscribe({
-      // Hide events with no real date (stored as the 1970-01-01 epoch) — e.g. the
-      // legacy "FIH" placeholder event. The records stay in the DB; they're just
-      // not surfaced here until the event has a proper date.
-      next: (r) => { this.rows.set(r.filter(x => realDate(x.eventDate) !== null)); this.loading.set(false); },
+      // Le type « FIH » général n'est rattaché à aucun spectacle daté : sa date
+      // est stockée comme l'époque 1970-01-01. On l'affiche comme les autres
+      // (libellé « Général » à la place de la date, via le pipe gdate).
+      next: (r) => { this.rows.set(r); this.loading.set(false); },
       error: () => { this.error.set(true); this.loading.set(false); }
     });
     this.badges.missingPosters().subscribe({

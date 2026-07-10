@@ -14,7 +14,7 @@ import java.util.Optional;
 
 public interface BilletRepository extends JpaRepository<Billet, String> {
 
-     Optional<Billet> findByCodebarre(String codebarre);
+    Optional<Billet> findByCodebarre(String codebarre);
 
     Optional<Billet> findByNumeroserie(String numeroserie);
 
@@ -75,7 +75,7 @@ public interface BilletRepository extends JpaRepository<Billet, String> {
             """, nativeQuery = true)
     List<AccessLogProjection> findPublicAccessLog(@Param("numeroserie") String numeroserie);
 
-     @Query(value = """
+    @Query(value = """
             SELECT t.reference        AS "reference",
                    t.codebarre        AS "codebarre",
                    t.datetransaction  AS "datetransaction",

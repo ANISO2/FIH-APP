@@ -1,9 +1,8 @@
-import { Component, effect, signal } from '@angular/core';
+import { Component, OnInit, signal } from '@angular/core';
 import { NgxEchartsDirective } from 'ngx-echarts';
 import { forkJoin } from 'rxjs';
 import type { EChartsOption } from 'echarts';
 import { StatsService } from '../core/stats.service';
-import { YearStore } from '../core/year-store.service';
 import { Overview, EntryByDay, Gate, TicketTypes, EventRollup } from '../core/models';
 import { KpiCardComponent } from '../shared/kpi-card.component';
 import { ChartCardComponent } from '../shared/chart-card.component';
@@ -62,7 +61,7 @@ import { realDate } from '../shared/format';
     }
   `
 })
-export class OverviewComponent {
+export class OverviewComponent implements OnInit {
   loading = signal(true);
   error = signal(false);
   ov = signal<Overview | null>(null);
@@ -72,14 +71,9 @@ export class OverviewComponent {
   ticketOpt = signal<EChartsOption>({});
   topEventsOpt = signal<EChartsOption>({});
 
-  constructor(private stats: StatsService, private years: YearStore) {
-    // Recharge automatiquement à chaque changement d'année (3.2).
-    effect(() => {
-      if (!this.years.ready()) return;
-      const year = this.years.year();
-      this.fetch(year);
-    });
-  }
+  constructor(private stats: StatsService) {}
+
+  ngOnInit(): void { this.fetch(); }
 
   ticketsIssued(): number {
     const o = this.ov();
@@ -87,16 +81,16 @@ export class OverviewComponent {
   }
 
   private reqId = 0;
-  private fetch(year: number | null): void {
+  private fetch(): void {
     const seq = ++this.reqId;          // 3.4 : ignore les réponses obsolètes
     this.loading.set(true);
     this.error.set(false);
     forkJoin({
-      overview: this.stats.overview(year),
-      byDay: this.stats.entriesByDay(year),
-      gate: this.stats.gate(year),
-      tickets: this.stats.ticketTypes(year),
-      events: this.stats.events(year)
+      overview: this.stats.overview(),
+      byDay: this.stats.entriesByDay(),
+      gate: this.stats.gate(),
+      tickets: this.stats.ticketTypes(),
+      events: this.stats.events()
     }).subscribe({
       next: (d) => {
         if (seq !== this.reqId) return;

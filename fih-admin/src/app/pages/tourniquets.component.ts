@@ -1,10 +1,9 @@
-import { Component, effect, signal, OnDestroy } from '@angular/core';
+import { Component, effect, signal, OnInit, OnDestroy } from '@angular/core';
 import { StatsService } from '../core/stats.service';
-import { YearStore } from '../core/year-store.service';
 import { TourniquetEvent } from '../core/models';
 import { LoadingSkeletonComponent } from '../shared/loading-skeleton.component';
 import { EmptyStateComponent } from '../shared/empty-state.component';
-import { NumPipe, PctPipe, FDatePipe } from '../shared/format';
+import { NumPipe, PctPipe, GDatePipe } from '../shared/format';
 
 /**
  * §5.3 — Statistique des tourniquets. One block per spectacle (event): a header
@@ -15,12 +14,12 @@ import { NumPipe, PctPipe, FDatePipe } from '../shared/format';
 @Component({
   selector: 'app-tourniquets',
   standalone: true,
-  imports: [LoadingSkeletonComponent, EmptyStateComponent, NumPipe, PctPipe, FDatePipe],
+  imports: [LoadingSkeletonComponent, EmptyStateComponent, NumPipe, PctPipe, GDatePipe],
   template: `
     <div class="flex flex-wrap items-start justify-between gap-4 mb-5">
       <div>
         <h2 class="text-xl font-bold text-ink mb-1">Statistique des tourniquets</h2>
-        <p class="text-sm text-muted">Codes accessibles et transactions par spectacle et modèle · {{ years.label() }}</p>
+        <p class="text-sm text-muted">Codes accessibles et transactions par spectacle et modèle</p>
       </div>
       <div class="flex items-center gap-2">
         <button class="btn-ghost" [class.on]="auto()" (click)="auto.set(!auto())"
@@ -47,7 +46,7 @@ import { NumPipe, PctPipe, FDatePipe } from '../shared/format';
           <!-- En-tête événement + totaux -->
           <div class="px-5 py-4 border-b border-line flex flex-wrap items-center gap-x-8 gap-y-2">
             <div class="font-semibold text-ink mr-auto">
-              {{ e.eventTitle }}<span class="text-xs text-muted ml-2">{{ e.eventDate | fdate:true }}</span>
+              {{ e.eventTitle }}<span class="text-xs text-muted ml-2">{{ e.eventDate | gdate:true }}</span>
             </div>
             <div class="text-sm" title="Billets émis / disponibles"><span class="text-muted">Émis</span> <span class="font-semibold text-ink ml-1">{{ e.audience | num }}</span></div>
             <div class="text-sm"><span class="text-muted">Transactions Billets</span> <span class="font-semibold text-ink ml-1">{{ e.transactionsBillets | num }}</span></div>
@@ -111,18 +110,14 @@ import { NumPipe, PctPipe, FDatePipe } from '../shared/format';
     @keyframes spin { to { transform: rotate(360deg); } }
   `]
 })
-export class TourniquetsComponent implements OnDestroy {
+export class TourniquetsComponent implements OnInit, OnDestroy {
   loading = signal(true);
   error = signal(false);
   events = signal<TourniquetEvent[]>([]);
   auto = signal(false);                 // 3.3 : OFF par défaut (l'utilisateur active l'auto-actualisation)
   private timer?: ReturnType<typeof setInterval>;
 
-  constructor(private stats: StatsService, public years: YearStore) {
-    effect(() => {
-      if (!this.years.ready()) return;
-      this.fetch(this.years.year());
-    });
+  constructor(private stats: StatsService) {
     // 3.3 — Auto-actualisation OFF par défaut. Le minuteur n'existe QUE pendant
     // que « Auto » est actif : cet effect le démarre quand auto() passe à true
     // et l'arrête COMPLÈTEMENT quand auto() repasse à false. Endpoint mis en
@@ -134,11 +129,13 @@ export class TourniquetsComponent implements OnDestroy {
     });
   }
 
+  ngOnInit(): void { this.fetch(); }
+
   private startTimer(): void {
     if (this.timer) return;
     this.timer = setInterval(() => {
       if (!this.loading() && (typeof document === 'undefined' || !document.hidden)) {
-        this.fetch(this.years.year(), false);
+        this.fetch(false);
       }
     }, 30_000);
   }
@@ -156,14 +153,14 @@ export class TourniquetsComponent implements OnDestroy {
     return e.audience > 0 ? (e.tourniquets * 100) / e.audience : 0;
   }
 
-  actualiser(): void { this.fetch(this.years.year(), true); }
+  actualiser(): void { this.fetch(true); }
 
   private reqId = 0;
-  private fetch(year: number | null, refresh = false): void {
+  private fetch(refresh = false): void {
     const seq = ++this.reqId;       // 3.4 : ignore les réponses obsolètes
     this.loading.set(true);
     this.error.set(false);
-    this.stats.tourniquets(year, refresh).subscribe({
+    this.stats.tourniquets(refresh).subscribe({
       next: (e) => { if (seq !== this.reqId) return; this.events.set(e); this.loading.set(false); },
       error: () => { if (seq !== this.reqId) return; this.error.set(true); this.loading.set(false); }
     });

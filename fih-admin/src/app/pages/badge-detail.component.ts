@@ -78,13 +78,17 @@ const CONFIRM_SINGLE =
       <div class="flex flex-wrap items-end gap-3">
         <label class="text-sm">
           <span class="block text-muted mb-1">N° série début</span>
-          <input [(ngModel)]="lotStart" placeholder="ex. 8250000000"
-                 class="px-3 py-2 rounded-lg border border-line bg-white w-44 focus:border-accent outline-none" />
+          <input [(ngModel)]="lotStart" (ngModelChange)="clearLotErrors()" placeholder="ex. 8250000000"
+                 class="px-3 py-2 rounded-lg border border-line bg-white w-44 focus:border-accent outline-none"
+                 [style.borderColor]="startError() ? 'var(--warn)' : null" />
+          @if (startError()) { <span class="block mt-1 text-xs w-44" style="color:var(--warn)">{{ startError() }}</span> }
         </label>
         <label class="text-sm">
           <span class="block text-muted mb-1">N° série fin</span>
-          <input [(ngModel)]="lotEnd" placeholder="ex. 8250000050"
-                 class="px-3 py-2 rounded-lg border border-line bg-white w-44 focus:border-accent outline-none" />
+          <input [(ngModel)]="lotEnd" (ngModelChange)="clearLotErrors()" placeholder="ex. 8250000050"
+                 class="px-3 py-2 rounded-lg border border-line bg-white w-44 focus:border-accent outline-none"
+                 [style.borderColor]="endError() ? 'var(--warn)' : null" />
+          @if (endError()) { <span class="block mt-1 text-xs w-44" style="color:var(--warn)">{{ endError() }}</span> }
         </label>
         <label class="text-sm">
           <span class="block text-muted mb-1">Nom de base</span>
@@ -99,6 +103,22 @@ const CONFIRM_SINGLE =
 
       @if (lotMsg()) {
         <div class="mt-3 text-sm px-3 py-2 rounded-lg" style="background:rgba(10,124,74,.10);color:var(--success)">{{ lotMsg() }}</div>
+      }
+
+      <!-- Actions post-affectation : le lot est déjà affecté, on ne réaffiche PAS « Confirmer ». -->
+      @if (assignedDone()) {
+        <div class="mt-3 flex flex-wrap gap-2">
+          @if (printable()) {
+            <button (click)="generateLot()" [disabled]="generating()"
+                    class="px-3 py-2 rounded-lg text-sm font-medium border border-line bg-white hover:bg-bg disabled:opacity-50">
+              Générer les PDF du lot
+            </button>
+          }
+          <button (click)="downloadManifest()"
+                  class="px-3 py-2 rounded-lg text-sm font-medium border border-line bg-white hover:bg-bg">
+            Manifeste CSV
+          </button>
+        </div>
       }
 
       @if (preview(); as p) {
@@ -164,19 +184,6 @@ const CONFIRM_SINGLE =
                 @if (lotAssigning()) { <span class="msr text-[16px] animate-spin align-middle">progress_activity</span> }
                 Confirmer l'affectation ({{ p.eligibleCount }})
               </button>
-              <!-- Feature 3 — PDF generation only for printable types. -->
-              @if (assignedDone() && printable()) {
-                <button (click)="generateLot()" [disabled]="generating()"
-                        class="px-3 py-2 rounded-lg text-sm font-medium border border-line bg-white hover:bg-bg disabled:opacity-50">
-                  Générer les PDF du lot
-                </button>
-              }
-              @if (assignedDone()) {
-                <button (click)="downloadManifest()"
-                        class="px-3 py-2 rounded-lg text-sm font-medium border border-line bg-white hover:bg-bg">
-                  Manifeste CSV
-                </button>
-              }
             </div>
           }
         </div>
@@ -414,6 +421,8 @@ export class BadgeDetailComponent implements OnInit {
   lotLoading = signal(false);
   lotAssigning = signal(false);
   lotMsg = signal<string | null>(null);
+  startError = signal<string | null>(null);   // N° série début : inexistant / déjà affecté
+  endError = signal<string | null>(null);      // N° série fin   : inexistant / déjà affecté
   preview = signal<LotPreview | null>(null);
   assignedDone = signal(false);
   private assignedSerials: string[] = [];
@@ -547,12 +556,28 @@ export class BadgeDetailComponent implements OnInit {
     if (!req.startSerie || !req.endSerie || !req.baseName) { this.errorMsg.set('Début, fin et nom de base sont obligatoires.'); return; }
     this.errorMsg.set(null);
     this.lotMsg.set(null);
+    this.clearLotErrors();
     this.assignedDone.set(false);
     this.lotLoading.set(true);
     this.badges.lotPreview(req).subscribe({
-      next: (p) => { this.preview.set(p); this.lotLoading.set(false); },
+      next: (p) => { this.preview.set(p); this.checkEndpoints(p); this.lotLoading.set(false); },
       error: (e) => { this.lotLoading.set(false); this.errorMsg.set(e?.error?.message || 'Échec de la prévisualisation.'); }
     });
+  }
+
+  /** Field-level feedback for the début/fin serials, computed from the preview. */
+  clearLotErrors(): void { this.startError.set(null); this.endError.set(null); }
+  private checkEndpoints(p: LotPreview): void {
+    this.startError.set(this.endpointError(this.lotStart.trim(), p));
+    this.endError.set(this.endpointError(this.lotEnd.trim(), p));
+  }
+  private endpointError(serial: string, p: LotPreview): string | null {
+    if (!serial) return null;
+    if (p.alreadyAssignedSerials.includes(serial)) return 'Ce numéro de série est déjà affecté.';
+    if (!p.items.some(i => i.numeroserie === serial)) {
+      return "Ce numéro de série n'existe pas (ou n'est pas une invitation affectable).";
+    }
+    return null;
   }
   askAssign(p: LotPreview): void {
     if (!p.canAssign) return;
@@ -571,6 +596,8 @@ export class BadgeDetailComponent implements OnInit {
         this.assignedSerials = res.assigned.map(a => a.numeroserie);
         this.assignedDone.set(true);
         this.lotMsg.set(res.assignedCount + ' entrée(s) affectée(s) avec succès.');
+        this.preview.set(null);               // masque l'aperçu + le bouton « Confirmer » une fois fait
+        this.clearLotErrors();
         this.loadCounts();                    // Feature 2 — keep the counter live
         this.reload(this.page()?.page ?? 0);
       },

@@ -50,13 +50,9 @@ public class StatsService {
         return value;
     }
 
-     public List<Integer> availableYears() {
-        return repo.availableYears();
-    }
-
-    public OverviewDto overview(Integer year) {
-        OverviewCountsProjection c = repo.overviewCounts(year);
-        BusiestEventProjection busiest = repo.busiestEvent(year);
+    public OverviewDto overview() {
+        OverviewCountsProjection c = repo.overviewCounts();
+        BusiestEventProjection busiest = repo.busiestEvent();
         return new OverviewDto(
                 c.getTotalEvents(),
                 c.getTotalBillets(),
@@ -72,32 +68,32 @@ public class StatsService {
                 busiest == null ? 0 : busiest.getScans());
     }
 
-    public List<EntryByDayDto> entriesByDay(Integer year) {
-        return repo.entriesByDay(year).stream()
+    public List<EntryByDayDto> entriesByDay() {
+        return repo.entriesByDay().stream()
                 .map(p -> new EntryByDayDto(
                         toLocalDate(p.getDate()), p.getScans(), p.getAccepted(), p.getRejected()))
                 .toList();
     }
 
-    public GateDto gate(Integer year) {
-        return toGateDto(repo.gateBreakdown(year));
+    public GateDto gate() {
+        return toGateDto(repo.gateBreakdown());
     }
 
-    public TicketTypesDto ticketTypes(Integer year) {
-        TicketTypesProjection t = repo.ticketTypes(year);
+    public TicketTypesDto ticketTypes() {
+        TicketTypesProjection t = repo.ticketTypes();
         return new TicketTypesDto(
                 new TicketBucketDto(t.getBilletIssued(), t.getBilletScanned()),
                 new TicketBucketDto(t.getVoucherIssued(), t.getVoucherScanned()));
     }
 
-    public List<EventRollupDto> events(Integer year) {
-        return repo.eventRollups(year).stream().map(this::toRollupDto).toList();
+    public List<EventRollupDto> events() {
+        return repo.eventRollups().stream().map(this::toRollupDto).toList();
     }
 
     public EventDetailDto eventDetail(int id) {
         EventRollupProjection e = repo.eventRollup(id);
         if (e == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found");
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Événement introuvable.");
         }
         GateDto gate = toGateDto(repo.gateForEvent(id));
         List<HourEntryDto> hours = repo.entriesByHour(id).stream()
@@ -111,9 +107,9 @@ public class StatsService {
     }
 
     // ----------------------------------------------------------- Recette
-     public List<RecetteSummaryDto> recetteSummary(Integer year, boolean refresh) {
-        return cached("summary:" + year, refresh, () ->
-                repo.recetteSummary(year).stream()
+    public List<RecetteSummaryDto> recetteSummary(boolean refresh) {
+        return cached("summary", refresh, () ->
+                repo.recetteSummary().stream()
                         .map(p -> new RecetteSummaryDto(
                                 p.getEventId(), p.getEventTitle(), toLocalDate(p.getEventDate()),
                                 p.getBillet(), p.getVoucher(), p.getTotal()))
@@ -121,9 +117,9 @@ public class StatsService {
     }
 
 
-    public List<RecetteEventHeaderDto> recetteDetailHeaders(Integer year, boolean refresh) {
-        return cached("detailHeaders:" + year, refresh, () ->
-                repo.recetteDetailHeaders(year).stream()
+    public List<RecetteEventHeaderDto> recetteDetailHeaders(boolean refresh) {
+        return cached("detailHeaders", refresh, () ->
+                repo.recetteDetailHeaders().stream()
                         .map(p -> new RecetteEventHeaderDto(
                                 p.getEventId(), p.getEventTitle(), toLocalDate(p.getEventDate()),
                                 p.getTotalGenere(), p.getTotalVendu(), p.getTotalReste(),
@@ -144,16 +140,16 @@ public class StatsService {
     }
 
     // ------------------------------------------------- Recette par guichet
-    public List<RecetteGuichetSummaryDto> recetteGuichetSummary(Integer year) {
-        return repo.recetteGuichetSummary(year).stream()
+    public List<RecetteGuichetSummaryDto> recetteGuichetSummary() {
+        return repo.recetteGuichetSummary().stream()
                 .map(p -> new RecetteGuichetSummaryDto(
                         p.getEventId(), p.getEventTitle(), toLocalDate(p.getEventDate()),
                         p.getBillet(), p.getKit(), p.getTotal()))
                 .toList();
     }
 
-    public List<RecetteGuichetDetailDto> recetteGuichetDetail(Integer year) {
-        return repo.recetteGuichetDetail(year).stream()
+    public List<RecetteGuichetDetailDto> recetteGuichetDetail() {
+        return repo.recetteGuichetDetail().stream()
                 .map(p -> new RecetteGuichetDetailDto(
                         p.getEventId(), p.getEventTitle(), toLocalDate(p.getEventDate()),
                         p.getModelId(), p.getModelName(),
@@ -164,11 +160,11 @@ public class StatsService {
 
     // --------------------------------------------- Statistique des tourniquets
 
-    public List<TourniquetEventDto> tourniquets(Integer year, boolean refresh) {
-        return cached("tourniquets:" + year, refresh, () -> loadTourniquets(year));
+    public List<TourniquetEventDto> tourniquets(boolean refresh) {
+        return cached("tourniquets", refresh, () -> loadTourniquets());
     }
 
-    private List<TourniquetEventDto> loadTourniquets(Integer year) {
+    private List<TourniquetEventDto> loadTourniquets() {
         List<TourniquetEventDto> out = new java.util.ArrayList<>();
         java.util.Map<Integer, Integer> indexByEvent = new java.util.HashMap<>();
         // mutable accumulators per event, indexed in parallel with `out`
@@ -176,7 +172,7 @@ public class StatsService {
         List<long[]> totalsByIndex = new java.util.ArrayList<>(); // [audience, billetTx, voucherTx]
         List<Object[]> headByIndex = new java.util.ArrayList<>();  // [eventId, title, date]
 
-        for (TourniquetProjection p : repo.tourniquets(year)) {
+        for (TourniquetProjection p : repo.tourniquets()) {
             long audienceRow = p.getBilletCodes() + p.getVoucherCodes();
             TourniquetRowDto row = new TourniquetRowDto(
                     p.getModelId(), p.getModelName(),
@@ -211,18 +207,18 @@ public class StatsService {
     }
 
     // --------------------------------------------------- Analyse des rejets
-    public RejetsDto rejets(Integer year, boolean refresh) {
-        return cached("rejets:" + year, refresh, () -> loadRejets(year));
+    public RejetsDto rejets(boolean refresh) {
+        return cached("rejets", refresh, () -> loadRejets());
     }
 
-    private RejetsDto loadRejets(Integer year) {
-        var kpi = repo.rejetsKpi(year);
+    private RejetsDto loadRejets() {
+        var kpi = repo.rejetsKpi();
         long rejets = kpi == null ? 0 : kpi.getRejets();
         long total = kpi == null ? 0 : kpi.getTotal();
         long acceptes = total - rejets;
         double taux = total > 0 ? (rejets * 100.0) / total : 0.0;
 
-        var scans = repo.rejetsScans(year).stream()
+        var scans = repo.rejetsScans().stream()
                 .map(s -> new RejetsDto.Scan(
                         s.getCodebarre(), s.getEventTitle(), s.getPorte(),
                         s.getDateTime() == null ? null : s.getDateTime().toLocalDateTime(),
@@ -231,16 +227,16 @@ public class StatsService {
 
         return new RejetsDto(
                 rejets, acceptes, total, Math.round(taux * 10.0) / 10.0,
-                repo.rejetsParCategorie(year).stream()
+                repo.rejetsParCategorie().stream()
                         .map(g -> new RejetsDto.Groupe(g.getLabel(), g.getValeur())).toList(),
-                repo.rejetsParEvenement(year).stream()
+                repo.rejetsParEvenement().stream()
                         .map(e -> new RejetsDto.Evenement(e.getEventId(), e.getEventTitle(),
                                 toLocalDate(e.getEventDate()), e.getRejets())).toList(),
-                repo.rejetsParPorte(year).stream()
+                repo.rejetsParPorte().stream()
                         .map(g -> new RejetsDto.Groupe(g.getLabel(), g.getValeur())).toList(),
-                repo.rejetsParModele(year).stream()
+                repo.rejetsParModele().stream()
                         .map(m -> new RejetsDto.Modele(m.getModelId(), m.getModelName(), m.getRejets())).toList(),
-                repo.rejetsParJour(year).stream()
+                repo.rejetsParJour().stream()
                         .map(j -> new RejetsDto.Jour(toLocalDate(j.getJour()), j.getRejets())).toList(),
                 scans,
                 scans.size() >= 2000);

@@ -31,41 +31,43 @@ public interface AdminBilletSearchRepository extends Repository<Billet, String> 
             LEFT JOIN livreur lv     ON lv.reference = l.controlleur
             """;
 
+    /** Count base with the same evenement join as the select. */
+    String COUNT_FROM = "SELECT count(*) FROM billet b LEFT JOIN evenement e ON e.reference = b.evenement ";
 
 
-    @Query(value = SELECT + " WHERE b.codebarre = :value ORDER BY b.numeroserie LIMIT :size OFFSET :offset",
+    @Query(value = SELECT + " WHERE b.codebarre = :value " + " ORDER BY b.numeroserie LIMIT :size OFFSET :offset",
             nativeQuery = true)
     List<BilletSearchProjection> searchByCodebarre(@Param("value") String value,
                                                    @Param("size") int size,
                                                    @Param("offset") int offset);
 
-    @Query(value = "SELECT count(*) FROM billet b WHERE b.codebarre = :value", nativeQuery = true)
+    @Query(value = COUNT_FROM + " WHERE b.codebarre = :value ", nativeQuery = true)
     long countByCodebarre(@Param("value") String value);
 
-    @Query(value = SELECT + " WHERE b.codebarre LIKE :prefix ESCAPE '\\' ORDER BY b.codebarre, b.numeroserie LIMIT :size OFFSET :offset",
+    @Query(value = SELECT + " WHERE b.codebarre LIKE :prefix ESCAPE '\\' " + " ORDER BY b.codebarre, b.numeroserie LIMIT :size OFFSET :offset",
             nativeQuery = true)
     List<BilletSearchProjection> searchByCodebarrePrefix(@Param("prefix") String prefix,
                                                          @Param("size") int size,
                                                          @Param("offset") int offset);
 
-    @Query(value = "SELECT count(*) FROM billet b WHERE b.codebarre LIKE :prefix ESCAPE '\\'", nativeQuery = true)
+    @Query(value = COUNT_FROM + " WHERE b.codebarre LIKE :prefix ESCAPE '\\' ", nativeQuery = true)
     long countByCodebarrePrefix(@Param("prefix") String prefix);
 
-    @Query(value = SELECT + " WHERE b.numeroserie = :value ORDER BY b.numeroserie LIMIT :size OFFSET :offset",
+    @Query(value = SELECT + " WHERE b.numeroserie = :value " + " ORDER BY b.numeroserie LIMIT :size OFFSET :offset",
             nativeQuery = true)
     List<BilletSearchProjection> searchByNumeroserie(@Param("value") String value,
                                                      @Param("size") int size,
                                                      @Param("offset") int offset);
 
-    @Query(value = "SELECT count(*) FROM billet b WHERE b.numeroserie = :value", nativeQuery = true)
+    @Query(value = COUNT_FROM + " WHERE b.numeroserie = :value ", nativeQuery = true)
     long countByNumeroserie(@Param("value") String value);
 
-    @Query(value = SELECT + " WHERE b.numeroserie LIKE :prefix ESCAPE '\\' ORDER BY b.numeroserie LIMIT :size OFFSET :offset",
+    @Query(value = SELECT + " WHERE b.numeroserie LIKE :prefix ESCAPE '\\' " + " ORDER BY b.numeroserie LIMIT :size OFFSET :offset",
             nativeQuery = true)
     List<BilletSearchProjection> searchByNumeroseriePrefix(@Param("prefix") String prefix,
                                                            @Param("size") int size,
                                                            @Param("offset") int offset);
 
-    @Query(value = "SELECT count(*) FROM billet b WHERE b.numeroserie LIKE :prefix ESCAPE '\\'", nativeQuery = true)
+    @Query(value = COUNT_FROM + " WHERE b.numeroserie LIKE :prefix ESCAPE '\\' ", nativeQuery = true)
     long countByNumeroseriePrefix(@Param("prefix") String prefix);
 }

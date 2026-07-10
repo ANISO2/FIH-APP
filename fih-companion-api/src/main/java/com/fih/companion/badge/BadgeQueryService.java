@@ -2,6 +2,7 @@ package com.fih.companion.badge;
 
 import com.fih.companion.access.AccessZoneResolver;
 import com.fih.companion.badge.dto.*;
+import com.fih.companion.diagnostics.ConsoleLog;
 import com.fih.companion.badge.projection.AvailabilityProjection;
 import com.fih.companion.badge.projection.BadgeItemProjection;
 import com.fih.companion.badge.projection.CountsProjection;
@@ -29,8 +30,7 @@ import java.util.*;
 @Transactional(readOnly = true)
 public class BadgeQueryService {
 
-    /** Feature 2 — allowed status filter values for the items page. */
-    private static final Set<String> STATUSES = Set.of("pending", "affected", "all");
+     private static final Set<String> STATUSES = Set.of("pending", "affected", "all");
 
     private final BadgeRepository badgeRepo;
     private final BilletRepository billetRepo;
@@ -202,18 +202,21 @@ public class BadgeQueryService {
     private void requirePrintable(Integer modelId) {
         if (!classification.isPrintable(modelId)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND,
-                    "Badge PDF generation is restricted to printable invitation models");
+                    "La génération de PDF est réservée aux modèles d'invitation imprimables.");
         }
     }
 
-     private void requireAffectable(Integer modelId) {
+    private void requireAffectable(Integer modelId) {
         if (!classification.isAffectable(modelId)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND,
-                    "This section only handles non-paid models (paid billets/vouchers are excluded)");
+                    "Cette section ne gère que les modèles non payants.");
         }
     }
 
     private ResponseStatusException notFound(String what) {
-        return new ResponseStatusException(HttpStatus.NOT_FOUND, "Not found: " + what);
+        // Feature 3 — user-facing message stays generic French; the internal
+        // detail (event/model/code) is logged, not returned to the client.
+        ConsoleLog.log("BADGE", "not found: " + what);
+        return new ResponseStatusException(HttpStatus.NOT_FOUND, "Élément introuvable.");
     }
 }

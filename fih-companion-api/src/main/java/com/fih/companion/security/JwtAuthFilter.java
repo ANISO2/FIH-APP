@@ -47,12 +47,17 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             try {
                 Claims claims = jwtService.parse(token);
                 String subject = claims.getSubject();
+
+                Object roleClaim = claims.get("role");
+                String authority = Roles.INVITATIONS_CLAIM.equals(roleClaim)
+                        ? "ROLE_" + Roles.INVITATIONS
+                        : "ROLE_" + Roles.ADMIN;
                 var auth = new UsernamePasswordAuthenticationToken(
                         subject, null,
-                        List.of(new SimpleGrantedAuthority("ROLE_ADMIN")));
+                        List.of(new SimpleGrantedAuthority(authority)));
                 SecurityContextHolder.getContext().setAuthentication(auth);
                 ConsoleLog.log(TAG, "DECISION=AUTHENTICATED on " + endpoint
-                        + " — subject=" + subject + ", granted authority=ROLE_ADMIN"
+                        + " — subject=" + subject + ", granted authority=" + authority
                         + ", reason=signature valid and token not expired.");
             } catch (Exception ex) {
 

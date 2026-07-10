@@ -14,6 +14,8 @@ export class AuthService {
   readonly displayName = signal<string | null>(localStorage.getItem(NAME_KEY));
   readonly role = signal<string | null>(localStorage.getItem(ROLE_KEY));
   readonly isLoggedIn = computed(() => !!this._token());
+  /** Feature 1 — restricted account limited to the Invitations & Badges section. */
+  readonly isInvitationsOnly = computed(() => this.role() === 'INVITATIONS');
 
   constructor(private http: HttpClient) {}
 

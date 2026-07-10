@@ -27,41 +27,43 @@ public interface AdminVoucherSearchRepository extends Repository<Voucher, String
             LEFT JOIN voucherorder vo ON vo.reference = v.voucherorder
             """;
 
+    /** Count base with the same evenement join as the select. */
+    String COUNT_FROM = "SELECT count(*) FROM voucher v LEFT JOIN evenement e ON e.reference = v.evenement ";
 
 
-    @Query(value = SELECT + " WHERE v.codebarre = :value ORDER BY v.numeroserie LIMIT :size OFFSET :offset",
+    @Query(value = SELECT + " WHERE v.codebarre = :value " + " ORDER BY v.numeroserie LIMIT :size OFFSET :offset",
             nativeQuery = true)
     List<VoucherSearchProjection> searchByCodebarre(@Param("value") String value,
                                                     @Param("size") int size,
                                                     @Param("offset") int offset);
 
-    @Query(value = "SELECT count(*) FROM voucher v WHERE v.codebarre = :value", nativeQuery = true)
+    @Query(value = COUNT_FROM + " WHERE v.codebarre = :value ", nativeQuery = true)
     long countByCodebarre(@Param("value") String value);
 
-    @Query(value = SELECT + " WHERE v.codebarre LIKE :prefix ESCAPE '\\' ORDER BY v.codebarre, v.numeroserie LIMIT :size OFFSET :offset",
+    @Query(value = SELECT + " WHERE v.codebarre LIKE :prefix ESCAPE '\\' " + " ORDER BY v.codebarre, v.numeroserie LIMIT :size OFFSET :offset",
             nativeQuery = true)
     List<VoucherSearchProjection> searchByCodebarrePrefix(@Param("prefix") String prefix,
                                                           @Param("size") int size,
                                                           @Param("offset") int offset);
 
-    @Query(value = "SELECT count(*) FROM voucher v WHERE v.codebarre LIKE :prefix ESCAPE '\\'", nativeQuery = true)
+    @Query(value = COUNT_FROM + " WHERE v.codebarre LIKE :prefix ESCAPE '\\' ", nativeQuery = true)
     long countByCodebarrePrefix(@Param("prefix") String prefix);
 
-    @Query(value = SELECT + " WHERE v.numeroserie = :value ORDER BY v.numeroserie LIMIT :size OFFSET :offset",
+    @Query(value = SELECT + " WHERE v.numeroserie = :value " + " ORDER BY v.numeroserie LIMIT :size OFFSET :offset",
             nativeQuery = true)
     List<VoucherSearchProjection> searchByNumeroserie(@Param("value") String value,
                                                       @Param("size") int size,
                                                       @Param("offset") int offset);
 
-    @Query(value = "SELECT count(*) FROM voucher v WHERE v.numeroserie = :value", nativeQuery = true)
+    @Query(value = COUNT_FROM + " WHERE v.numeroserie = :value ", nativeQuery = true)
     long countByNumeroserie(@Param("value") String value);
 
-    @Query(value = SELECT + " WHERE v.numeroserie LIKE :prefix ESCAPE '\\' ORDER BY v.numeroserie LIMIT :size OFFSET :offset",
+    @Query(value = SELECT + " WHERE v.numeroserie LIKE :prefix ESCAPE '\\' " + " ORDER BY v.numeroserie LIMIT :size OFFSET :offset",
             nativeQuery = true)
     List<VoucherSearchProjection> searchByNumeroseriePrefix(@Param("prefix") String prefix,
                                                             @Param("size") int size,
                                                             @Param("offset") int offset);
 
-    @Query(value = "SELECT count(*) FROM voucher v WHERE v.numeroserie LIKE :prefix ESCAPE '\\'", nativeQuery = true)
+    @Query(value = COUNT_FROM + " WHERE v.numeroserie LIKE :prefix ESCAPE '\\' ", nativeQuery = true)
     long countByNumeroseriePrefix(@Param("prefix") String prefix);
 }

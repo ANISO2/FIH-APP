@@ -48,7 +48,8 @@ public class SecurityConfig {
                 + "-> DeviceTokenFilter -> JwtAuthFilter -> authorization rules. "
                 + "Public: OPTIONS/**, /api/auth/login, /api/events/**, /api/diagnostics/**. "
                 + "DEVICE or ADMIN: /api/verify/**, GET mobile stats. "
-                + "ADMIN only: /api/stats/**, /api/badges/**, /api/invitations/** (the write endpoints).");
+                + "ADMIN or INVITATIONS: /api/badges/**, /api/invitations/** (Invitations & Badges section). "
+                + "ADMIN only: /api/stats/** (overview, recette, verification, ...).");
         http
                 // Enable CORS using the bean below.
                 .cors(Customizer.withDefaults())
@@ -66,10 +67,14 @@ public class SecurityConfig {
                         // [ADDED] mobile dashboard: device OR admin may read these global feeds (GET only).
                         // Placed BEFORE the broad /api/stats/** rule so it is not shadowed.
                         .requestMatchers(HttpMethod.GET, MOBILE_STATS_GET).hasAnyRole("DEVICE", "ADMIN")
-                        // Everything else under stats (recette/**, events, ...) and all of badges: ADMIN only — unchanged.
-                        .requestMatchers("/api/stats/**", "/api/badges/**").hasRole("ADMIN")
-                        // The only write endpoints in the app (badge name). Admin only.
-                        .requestMatchers("/api/invitations/**").hasRole("ADMIN")
+                        // Feature 1 — the Invitations & Badges section: ADMIN or the restricted
+                        // INVITATIONS role. This is the ONLY area the restricted account may reach.
+                        .requestMatchers("/api/badges/**").hasAnyRole("ADMIN", "INVITATIONS")
+                        // The only write endpoints in the app (badge name): ADMIN or INVITATIONS.
+                        .requestMatchers("/api/invitations/**").hasAnyRole("ADMIN", "INVITATIONS")
+                        // Everything else under stats (overview, recette/**, verification/**, ...):
+                        // ADMIN only — the INVITATIONS role is rejected here even if called directly.
+                        .requestMatchers("/api/stats/**").hasRole("ADMIN")
                         .anyRequest().authenticated())
                 .exceptionHandling(e -> e.authenticationEntryPoint(
                         (req, res, ex) -> res.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized")))

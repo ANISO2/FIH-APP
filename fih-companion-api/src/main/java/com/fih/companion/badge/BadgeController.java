@@ -78,7 +78,7 @@ public class BadgeController {
         if (req.eventId() == null || req.modelId() == null) {
             return ResponseEntity.badRequest().build();
         }
-         // invitation (each keeping the existing single-ticket design), bundled
+        // invitation (each keeping the existing single-ticket design), bundled
         // into a single ZIP. Every PDF is named after that invitation's
         // "Affect\u00e9 \u00e0" value; invitations without a name are NOT skipped —
         // they fall back to a clearly-marked "SANS-NOM_<code>" file name.
@@ -89,11 +89,20 @@ public class BadgeController {
         String base = "badges_" + sanitize(all.get(0).eventTitle())
                 + "_" + sanitize(all.get(0).modelName());
 
+        // Buffered build (small ZIP now that posters are downscaled) so we can
+        // send a real Content-Length — that's what makes the browser reliably
+        // show the download; the earlier streaming response had no length and
+        // the large blob never triggered the client-side save.
         byte[] zip = pdf.batchZipPerAffectee(all);
         // Only affected invitations own a badge_affectation row, so markPrinted
         // stamps printed_at for those; unaffected serials are a no-op update.
         affectee.markPrinted(all.stream().map(BadgeRecord::numeroserie).toList());
-        return pdfResponse(zip, base + ".zip", MediaType.parseMediaType("application/zip"), null);
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType("application/zip"))
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + base + ".zip\"")
+                .contentLength(zip.length)
+                .body(zip);
     }
 
     private boolean isUnaffected(BadgeRecord rec) {

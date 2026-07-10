@@ -20,34 +20,29 @@ public class StatsController {
         this.service = service;
     }
 
-     @GetMapping("/years")
-    public List<Integer> years() {
-        return service.availableYears();
-    }
-
     @GetMapping("/overview")
-    public OverviewDto overview(@RequestParam(required = false) Integer year) {
-        return service.overview(year);
+    public OverviewDto overview() {
+        return service.overview();
     }
 
     @GetMapping("/entries-by-day")
-    public List<EntryByDayDto> entriesByDay(@RequestParam(required = false) Integer year) {
-        return service.entriesByDay(year);
+    public List<EntryByDayDto> entriesByDay() {
+        return service.entriesByDay();
     }
 
     @GetMapping("/gate")
-    public GateDto gate(@RequestParam(required = false) Integer year) {
-        return service.gate(year);
+    public GateDto gate() {
+        return service.gate();
     }
 
     @GetMapping("/ticket-types")
-    public TicketTypesDto ticketTypes(@RequestParam(required = false) Integer year) {
-        return service.ticketTypes(year);
+    public TicketTypesDto ticketTypes() {
+        return service.ticketTypes();
     }
 
     @GetMapping("/events")
-    public List<EventRollupDto> events(@RequestParam(required = false) Integer year) {
-        return service.events(year);
+    public List<EventRollupDto> events() {
+        return service.events();
     }
 
     @GetMapping("/events/{id}")
@@ -59,17 +54,15 @@ public class StatsController {
 
     @GetMapping("/recette/summary")
     public List<RecetteSummaryDto> recetteSummary(
-            @RequestParam(required = false) Integer year,
             @RequestParam(required = false, defaultValue = "false") boolean refresh) {
-        return service.recetteSummary(year, refresh);
+        return service.recetteSummary(refresh);
     }
 
     /** Détaillée — one collapsible panel header (totals) per event. */
     @GetMapping("/recette/detail")
     public List<RecetteEventHeaderDto> recetteDetail(
-            @RequestParam(required = false) Integer year,
             @RequestParam(required = false, defaultValue = "false") boolean refresh) {
-        return service.recetteDetailHeaders(year, refresh);
+        return service.recetteDetailHeaders(refresh);
     }
 
     /** Détaillée — per-model rows for one event, loaded on expand. */
@@ -80,28 +73,26 @@ public class StatsController {
 
     // ------------------------------------------------- Recette par guichet
     @GetMapping("/recette/guichet/summary")
-    public List<RecetteGuichetSummaryDto> recetteGuichetSummary(@RequestParam(required = false) Integer year) {
-        return service.recetteGuichetSummary(year);
+    public List<RecetteGuichetSummaryDto> recetteGuichetSummary() {
+        return service.recetteGuichetSummary();
     }
 
     @GetMapping("/recette/guichet/detail")
-    public List<RecetteGuichetDetailDto> recetteGuichetDetail(@RequestParam(required = false) Integer year) {
-        return service.recetteGuichetDetail(year);
+    public List<RecetteGuichetDetailDto> recetteGuichetDetail() {
+        return service.recetteGuichetDetail();
     }
 
     // --------------------------------------------- Statistique des tourniquets
     @GetMapping("/tourniquets")
     public List<TourniquetEventDto> tourniquets(
-            @RequestParam(required = false) Integer year,
             @RequestParam(required = false, defaultValue = "false") boolean refresh) {
-        return service.tourniquets(year, refresh);
+        return service.tourniquets(refresh);
     }
 
     // --------------------------------------------- Analyse des rejets (
     @GetMapping("/rejets")
     public RejetsDto rejets(
-            @RequestParam(required = false) Integer year,
             @RequestParam(required = false, defaultValue = "false") boolean refresh) {
-        return service.rejets(year, refresh);
+        return service.rejets(refresh);
     }
 }

@@ -12,7 +12,14 @@ import com.google.zxing.common.BitMatrix;
 import com.google.zxing.qrcode.QRCodeWriter;
 import org.springframework.stereotype.Service;
 
+import javax.imageio.IIOImage;
+import javax.imageio.ImageIO;
+import javax.imageio.ImageWriteParam;
+import javax.imageio.ImageWriter;
+import javax.imageio.stream.ImageOutputStream;
 import java.awt.Color;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.nio.file.Files;
@@ -24,6 +31,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.zip.Deflater;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -74,25 +82,58 @@ public class BadgePdfService {
     // ----------------------------------------------------------- public API
     /** One ticket, sized to the ticket page. */
     public byte[] single(BadgeRecord rec) {
+        return single(rec, new HashMap<>());
+    }
+
+    /**
+     * One ticket, reusing a per-batch poster cache so the poster file is read,
+     * downscaled and re-encoded ONCE for the whole batch instead of once per
+     * ticket (the old behaviour re-read and re-embedded the full-size poster
+     * into every PDF, which is what made « Tout générer » blow up on ~200 badges).
+     */
+    private byte[] single(BadgeRecord rec, Map<String, byte[]> posterCache) {
         ByteArrayOutputStream os = new ByteArrayOutputStream();
         Document doc = new Document(ticketPage(), 0, 0, 0, 0);
         PdfWriter writer = PdfWriter.getInstance(doc, os);
         doc.open();
         Rectangle p = doc.getPageSize();
-        drawTicket(writer.getDirectContent(), writer, rec, 0, 0, p.getWidth(), p.getHeight());
+        drawTicket(writer.getDirectContent(), writer, rec, posterCache, 0, 0, p.getWidth(), p.getHeight());
         doc.close();
         return os.toByteArray();
     }
 
 
+    /**
+     * Streams the badge ZIP straight into {@code out} (the HTTP response body):
+     * one PDF is held in memory at a time instead of the whole archive, so the
+     * heap footprint is constant regardless of the batch size, and the download
+     * starts immediately — the browser sees bytes flowing within a second.
+     *
+     * The entries are STOREd rather than deflated: each PDF is dominated by an
+     * already-compressed JPEG poster stream, so deflating again costs CPU for
+     * essentially zero size gain.
+     */
+    /**
+     * Builds the whole badge ZIP into a byte[] — one PDF is generated at a
+     * time (peak memory ≈ the finished ZIP + one PDF), so with the poster-size
+     * fix a 200-badge archive is only ~10 MB. Returning a concrete byte[] lets
+     * the controller send a real Content-Length, which is what makes the
+     * browser reliably show the download (a chunked/streaming response gave no
+     * length and the large blob wouldn't fire the save on the client).
+     *
+     * Entries are STOREd (NO_COMPRESSION): each PDF is dominated by an
+     * already-compressed JPEG, so deflating again is CPU for ~0 gain.
+     */
     public byte[] batchZipPerAffectee(List<BadgeRecord> recs) {
         ByteArrayOutputStream os = new ByteArrayOutputStream();
         Map<String, Integer> used = new HashMap<>();
+        Map<String, byte[]> posterCache = new HashMap<>();
         try (ZipOutputStream zip = new ZipOutputStream(os)) {
+            zip.setLevel(Deflater.NO_COMPRESSION);
             for (BadgeRecord rec : recs) {
                 String entry = uniqueEntryName(fileBaseName(rec), rec, used);
                 zip.putNextEntry(new ZipEntry(entry));
-                zip.write(single(rec));
+                zip.write(single(rec, posterCache));
                 zip.closeEntry();
             }
         } catch (Exception e) {
@@ -148,6 +189,7 @@ public class BadgePdfService {
     // ------------------------------------------------------ one ticket drawing
 
     private void drawTicket(PdfContentByte cb, PdfWriter writer, BadgeRecord rec,
+                            Map<String, byte[]> posterCache,
                             float x0, float y0, float w, float h) {
         final float s = w / (T_W * MM);   // points-per-(logical mm*MM); 1.0 at full size
 
@@ -162,7 +204,7 @@ public class BadgePdfService {
         cb.fill();
 
         // 2) poster, cover-fitted into the left panel (0 .. 100 mm)
-        drawPoster(cb, rec, x0, y0, h, s);
+        drawPoster(cb, rec, posterCache, x0, y0, h, s);
 
         // 3) holder name — RELOCATED. The name is no longer printed above the
         // cards; it is now set vertically in the white strip on the far right
@@ -179,7 +221,10 @@ public class BadgePdfService {
         // 5) QR card + QR image
         card(cb, x0, y0, h, s, CARD_L, 55f, CARD_R, 93f);
         try {
-            Image qr = Image.getInstance(qrImage(rec.codebarre(), 320), null);
+            // forceBW so OpenPDF stores the QR as a 1-bit bilevel image (a QR is
+            // pure black/white) instead of a 24-bit RGB raster — a few KB saved
+            // per badge with zero visible change.
+            Image qr = Image.getInstance(qrImage(rec.codebarre(), 256), null, true);
             float qs = 30f * MM * s;
             qr.scaleAbsolute(qs, qs);
             qr.setAbsolutePosition(X(x0, CARD_CX, s) - qs / 2f, Yt(y0, h, 74f, s) - qs / 2f);
@@ -230,12 +275,25 @@ public class BadgePdfService {
     }
 
     // --------------------------------------------------------------- helpers
-    private void drawPoster(PdfContentByte cb, BadgeRecord rec, float x0, float y0, float h, float s) {
+
+    // Poster embedding budget comes from BadgeProperties (poster-embed-max-px /
+    // poster-embed-quality) so the per-badge PDF size can be tuned in
+    // application.yml without recompiling. The poster is the dominant term in
+    // each PDF, so this is the single biggest lever on ZIP size.
+    private void drawPoster(PdfContentByte cb, BadgeRecord rec, Map<String, byte[]> posterCache,
+                            float x0, float y0, float h, float s) {
         float pw = POSTER_W * MM * s;
         Path poster = resolvePoster(rec.eventTitle());
         if (poster != null) {
             try {
-                Image img = Image.getInstance(poster.toString());
+                // Empty array = "we already tried and failed" sentinel, so a
+                // broken poster file is not re-attempted 200 times per batch.
+                byte[] bytes = posterCache.computeIfAbsent(poster.toString(), k -> {
+                    byte[] b = scaledPosterBytes(poster);
+                    return b == null ? new byte[0] : b;
+                });
+                if (bytes.length == 0) throw new IllegalStateException("unreadable poster");
+                Image img = Image.getInstance(bytes);
                 float iw = img.getWidth(), ih = img.getHeight();
                 float scale = Math.max(pw / iw, h / ih);        // cover
                 float dw = iw * scale, dh = ih * scale;
@@ -260,6 +318,61 @@ public class BadgePdfService {
         cb.fill();
         text(cb, bfBold, 18f * s, WHITE, Element.ALIGN_CENTER,
                 safe(rec.eventTitle(), "FIH 2025"), x0 + pw / 2f, y0 + h / 2f);
+    }
+
+    /**
+     * Reads the poster ONCE and returns the bytes to embed in the PDFs:
+     * - anything else (big JPEG, any PNG) -> downscaled to POSTER_MAX_PX and
+     *   re-encoded as JPEG (PNG transparency is flattened onto white);
+     * - unreadable by ImageIO (e.g. CMYK JPEG) -> raw file bytes so OpenPDF
+     *   can still try its own decoder, exactly like the old code path;
+     * - I/O failure -> null (the caller draws the coloured placeholder).
+     */
+    private byte[] scaledPosterBytes(Path poster) {
+        try {
+            int maxPx = props.getPosterEmbedMaxPx();
+            float quality = props.getPosterEmbedQuality();
+            String name = poster.getFileName().toString().toLowerCase(Locale.ROOT);
+            boolean isJpeg = name.endsWith(".jpg") || name.endsWith(".jpeg");
+            BufferedImage src;
+            try {
+                src = ImageIO.read(poster.toFile());
+            } catch (Exception decodeFailure) {
+                src = null;
+            }
+            if (src == null) {
+                return Files.readAllBytes(poster);      // let OpenPDF try, as before
+            }
+            if (isJpeg && src.getWidth() <= maxPx) {
+                return Files.readAllBytes(poster);      // already small enough
+            }
+            float scale = Math.min(1f, maxPx / (float) src.getWidth());
+            int w = Math.max(1, Math.round(src.getWidth() * scale));
+            int hh = Math.max(1, Math.round(src.getHeight() * scale));
+            BufferedImage dst = new BufferedImage(w, hh, BufferedImage.TYPE_INT_RGB);
+            Graphics2D g = dst.createGraphics();
+            g.setColor(Color.WHITE);                    // flatten PNG alpha
+            g.fillRect(0, 0, w, hh);
+            g.setRenderingHint(RenderingHints.KEY_INTERPOLATION,
+                    RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+            g.drawImage(src, 0, 0, w, hh, null);
+            g.dispose();
+
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            ImageWriter writer = ImageIO.getImageWritersByFormatName("jpg").next();
+            ImageWriteParam param = writer.getDefaultWriteParam();
+            param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
+            param.setCompressionQuality(quality);
+            try (ImageOutputStream ios = ImageIO.createImageOutputStream(bos)) {
+                writer.setOutput(ios);
+                writer.write(null, new IIOImage(dst, null, null), param);
+            } finally {
+                writer.dispose();
+            }
+            return bos.toByteArray();
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     /** Filled white rounded card from (lmm,tmm) to (rmm,bmm) in top-anchored mm. */
@@ -319,10 +432,11 @@ public class BadgePdfService {
         return y0 + h - mmFromTop * MM * s;
     }
 
-    /** Build a QR code as a black/white image (OpenPDF has no QR generator of its own). */
+    /** Build a QR code as a 1-bit (black/white) image — OpenPDF stores it as a
+     *  compact bilevel raster rather than 24-bit RGB. */
     private BufferedImage qrImage(String text, int size) throws Exception {
         BitMatrix matrix = new QRCodeWriter().encode(text, BarcodeFormat.QR_CODE, size, size);
-        BufferedImage img = new BufferedImage(size, size, BufferedImage.TYPE_INT_RGB);
+        BufferedImage img = new BufferedImage(size, size, BufferedImage.TYPE_BYTE_BINARY);
         for (int x = 0; x < size; x++) {
             for (int y = 0; y < size; y++) {
                 img.setRGB(x, y, matrix.get(x, y) ? 0x000000 : 0xFFFFFF);

@@ -65,12 +65,18 @@ export class LoginComponent {
     this.loading.set(true);
     this.error.set(null);
     this.auth.login(this.username, this.password).subscribe({
-      next: () => { this.loading.set(false); this.router.navigate(['']); },
+      next: () => {
+        this.loading.set(false);
+        // Feature 1 — the restricted account lands directly on Invitations & Badges.
+        this.router.navigate([this.auth.isInvitationsOnly() ? '/badges' : '']);
+      },
       error: (err) => {
         this.loading.set(false);
+        // Feature 3 — 401 = bad credentials; anything else (backend down/inactive,
+        // server error) = a generic server-side error message.
         this.error.set(err.status === 401
-          ? 'Identifiant ou mot de passe invalide, ou vous n\'êtes pas administrateur.'
-          : 'Impossible de joindre le serveur. Le backend est-il démarré ?');
+          ? 'Identifiant ou mot de passe invalide.'
+          : 'Une erreur s\'est produite dans le serveur');
       }
     });
   }

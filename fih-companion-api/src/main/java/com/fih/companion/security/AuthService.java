@@ -14,13 +14,22 @@ public class AuthService {
 
     private final UtilisateurRepository utilisateurRepository;
     private final JwtService jwtService;
+    private final SecurityProperties securityProperties;
 
-    public AuthService(UtilisateurRepository utilisateurRepository, JwtService jwtService) {
+    public AuthService(UtilisateurRepository utilisateurRepository, JwtService jwtService,
+                       SecurityProperties securityProperties) {
         this.utilisateurRepository = utilisateurRepository;
         this.jwtService = jwtService;
+        this.securityProperties = securityProperties;
     }
 
     public LoginResponse login(LoginRequest request) {
+
+        LoginResponse invitationsLogin = tryInvitationsAccount(request);
+        if (invitationsLogin != null) {
+            return invitationsLogin;
+        }
+
         Utilisateur user = utilisateurRepository.findByUsername(request.username())
                 .orElseThrow(AuthService::unauthorized);
 
@@ -33,15 +42,34 @@ public class AuthService {
         return new LoginResponse(token, user.getRole(), displayName);
     }
 
-    private boolean isAdmin(Utilisateur user) {
-        return Boolean.TRUE.equals(user.getAdmin())
-                || "Administrateur".equalsIgnoreCase(user.getRole());
+
+    private LoginResponse tryInvitationsAccount(LoginRequest request) {
+        SecurityProperties.InvitationsAccount acc = securityProperties.getInvitationsAccount();
+        if (acc == null || !acc.isConfigured() || request == null) {
+            return null;
+        }
+        String submittedUser = request.username() == null ? "" : request.username().trim();
+        boolean userMatches = submittedUser.equalsIgnoreCase(acc.getUsername().trim());
+        if (!userMatches) {
+            return null;
+        }
+        if (!passwordMatches(request.password(), acc.getPassword())) {
+            throw unauthorized();
+        }
+        String displayName = acc.getDisplayName() == null || acc.getDisplayName().isBlank()
+                ? acc.getUsername() : acc.getDisplayName();
+        String token = jwtService.generate(acc.getUsername(), Roles.INVITATIONS_CLAIM, displayName);
+        return new LoginResponse(token, Roles.INVITATIONS_CLAIM, displayName);
     }
 
-    // The ONE place passwords are compared.
-    // TODO security: legacy plaintext passwords — the legacy DB stores passwords
-    // in plain text and this system is strictly read-only, so we compare as-is.
-    // Do NOT hash, salt, or write anything here.
+    private boolean isAdmin(Utilisateur user) {
+        return Boolean.TRUE.equals(user.getAdmin())
+               || "Administrateur".equalsIgnoreCase(user.getRole());
+        //return "Administrateur".equalsIgnoreCase(user.getRole());
+
+    }
+
+
     private boolean passwordMatches(String submitted, String stored) {
         return stored != null && stored.equals(submitted);
     }
@@ -54,6 +82,6 @@ public class AuthService {
     }
 
     private static ResponseStatusException unauthorized() {
-        return new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid credentials");
+        return new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Identifiants invalides.");
     }
 }

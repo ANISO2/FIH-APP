@@ -1,9 +1,8 @@
-import { Component, computed, effect, signal } from '@angular/core';
+import { Component, OnInit, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { NgxEchartsDirective } from 'ngx-echarts';
 import type { EChartsOption } from 'echarts';
 import { StatsService } from '../core/stats.service';
-import { YearStore } from '../core/year-store.service';
 import { RejetsData, RejetScan } from '../core/models';
 import { LoadingSkeletonComponent } from '../shared/loading-skeleton.component';
 import { EmptyStateComponent } from '../shared/empty-state.component';
@@ -47,7 +46,7 @@ const CAT_COLOR: Record<string, string> = {
     <div class="flex flex-wrap items-start justify-between gap-4 mb-5">
       <div>
         <h2 class="text-xl font-bold text-ink mb-1">Analyse des rejets</h2>
-        <p class="text-sm text-muted">Transactions refusées aux tourniquets · {{ years.label() }}</p>
+        <p class="text-sm text-muted">Transactions refusées aux tourniquets</p>
       </div>
       <button class="btn-ghost" (click)="actualiser()" [disabled]="loading()" title="Recharger les données">
         <span class="msr text-[18px]" [class.spin]="loading()">refresh</span> Actualiser
@@ -226,7 +225,7 @@ const CAT_COLOR: Record<string, string> = {
     @keyframes spin { to { transform: rotate(360deg); } }
   `]
 })
-export class RejetsComponent {
+export class RejetsComponent implements OnInit {
   loading = signal(true);
   error = signal(false);
   data = signal<RejetsData | null>(null);
@@ -302,21 +301,18 @@ export class RejetsComponent {
     };
   });
 
-  constructor(private stats: StatsService, public years: YearStore) {
-    effect(() => {
-      if (!this.years.ready()) return;
-      this.fetch(this.years.year());
-    });
-  }
+  constructor(private stats: StatsService) {}
 
-  actualiser(): void { this.fetch(this.years.year(), true); }
+  ngOnInit(): void { this.fetch(); }
+
+  actualiser(): void { this.fetch(true); }
 
   private reqId = 0;
-  private fetch(year: number | null, refresh = false): void {
+  private fetch(refresh = false): void {
     const seq = ++this.reqId;       // 3.4 : ignore les réponses obsolètes
     this.loading.set(true);
     this.error.set(false);
-    this.stats.rejets(year, refresh).subscribe({
+    this.stats.rejets(refresh).subscribe({
       next: (d) => { if (seq !== this.reqId) return; this.data.set(d); this.loading.set(false); },
       error: () => { if (seq !== this.reqId) return; this.error.set(true); this.loading.set(false); }
     });

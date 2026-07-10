@@ -1,8 +1,7 @@
-import { Component, effect, signal } from '@angular/core';
+import { Component, OnInit, signal } from '@angular/core';
 import { NgxEchartsDirective } from 'ngx-echarts';
 import type { EChartsOption } from 'echarts';
 import { StatsService } from '../core/stats.service';
-import { YearStore } from '../core/year-store.service';
 import { Gate } from '../core/models';
 import { ChartCardComponent } from '../shared/chart-card.component';
 import { LoadingSkeletonComponent } from '../shared/loading-skeleton.component';
@@ -70,26 +69,22 @@ import { BRAND } from '../shared/echarts-theme';
     }
   `
 })
-export class GatesComponent {
+export class GatesComponent implements OnInit {
   loading = signal(true);
   error = signal(false);
   g = signal<Gate | null>(null);
   stackOpt = signal<EChartsOption>({});
 
-  constructor(private stats: StatsService, private years: YearStore) {
-    effect(() => {
-      if (!this.years.ready()) return;
-      const year = this.years.year();
-      this.fetch(year);
-    });
-  }
+  constructor(private stats: StatsService) {}
+
+  ngOnInit(): void { this.fetch(); }
 
   private reqId = 0;
-  private fetch(year: number | null): void {
+  private fetch(): void {
     const seq = ++this.reqId;       // 3.4 : ignore les réponses obsolètes
     this.loading.set(true);
     this.error.set(false);
-    this.stats.gate(year).subscribe({
+    this.stats.gate().subscribe({
       next: (g) => { if (seq !== this.reqId) return; this.g.set(g); this.buildStack(g); this.loading.set(false); },
       error: () => { if (seq !== this.reqId) return; this.error.set(true); this.loading.set(false); }
     });

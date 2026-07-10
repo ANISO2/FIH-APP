@@ -1,9 +1,8 @@
-import { Component, computed, effect, signal } from '@angular/core';
+import { Component, OnInit, computed, signal } from '@angular/core';
 import { forkJoin } from 'rxjs';
 import { NgxEchartsDirective } from 'ngx-echarts';
 import type { EChartsOption } from 'echarts';
 import { StatsService } from '../core/stats.service';
-import { YearStore } from '../core/year-store.service';
 import { RecetteSummary, RecetteEventHeader, RecetteModelRow } from '../core/models';
 import { LoadingSkeletonComponent } from '../shared/loading-skeleton.component';
 import { EmptyStateComponent } from '../shared/empty-state.component';
@@ -49,7 +48,7 @@ function tnd(v: number): string {
     <div class="flex flex-wrap items-start justify-between gap-4 mb-5">
       <div>
         <h2 class="text-xl font-bold text-ink mb-1">Recette</h2>
-        <p class="text-sm text-muted">Chiffre d'affaires par événement et par modèle · {{ years.label() }}</p>
+        <p class="text-sm text-muted">Chiffre d'affaires par événement et par modèle</p>
       </div>
       <div class="flex items-center gap-3">
         <!-- Actualiser : recharge les agrégats en ignorant le cache court du serveur. -->
@@ -276,7 +275,7 @@ function tnd(v: number): string {
     @keyframes spin { to { transform: rotate(360deg); } }
   `]
 })
-export class RecetteComponent {
+export class RecetteComponent implements OnInit {
   loading = signal(true);
   error = signal(false);
   exporting = signal(false);
@@ -402,28 +401,25 @@ export class RecetteComponent {
   /** Hauteur du graphe horizontal : croît avec le nombre d'événements (lisible, sans entassement). */
   gvrHeight = computed(() => Math.max(340, this.headers().length * 26 + 70));
 
-  constructor(private stats: StatsService, public years: YearStore) {
-    effect(() => {
-      if (!this.years.ready()) return;
-      this.fetch(this.years.year());
-    });
-  }
+  constructor(private stats: StatsService) {}
+
+  ngOnInit(): void { this.fetch(); }
 
   // ---- Chargement ----
   private reqId = 0;
-  private fetch(year: number | null, refresh = false): void {
+  private fetch(refresh = false): void {
     const seq = ++this.reqId;       // 3.4 : ignore les réponses obsolètes
     this.loading.set(true);
     this.error.set(false);
-    if (!refresh) {                 // year change: start clean
+    if (!refresh) {                 // start clean
       this.expanded.set(new Set());
       this.rowsByEvent.set(new Map());
     }
-    this.stats.recetteSummary(year, refresh).subscribe({
+    this.stats.recetteSummary(refresh).subscribe({
       next: (s) => {
         if (seq !== this.reqId) return;
         this.summary.set(s);
-        this.stats.recetteDetailHeaders(year, refresh).subscribe({
+        this.stats.recetteDetailHeaders(refresh).subscribe({
           next: (h) => {
             if (seq !== this.reqId) return;
             this.headers.set(h);
@@ -441,7 +437,7 @@ export class RecetteComponent {
   /** « Actualiser » : recharge en ignorant le cache court du serveur. */
   actualiser(): void {
     this.rowsByEvent.set(new Map());   // force le rechargement des lignes ouvertes
-    this.fetch(this.years.year(), true);
+    this.fetch(true);
   }
 
   // ---- Accordéon (chargement paresseux par événement) ----
@@ -535,7 +531,7 @@ export class RecetteComponent {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `recette-detaillee-${this.years.year() ?? 'toutes'}.csv`;
+    a.download = 'recette-detaillee.csv';
     a.click();
     URL.revokeObjectURL(url);
   }

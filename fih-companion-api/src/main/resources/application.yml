@@ -96,6 +96,12 @@ fih:
       expiration-minutes: ${FIH_JWT_EXPIRATION_MINUTES:480}
     device-token: ${FIH_DEVICE_TOKEN:dev-device-token}
 
+    
+    invitations-account:
+      username: ${FIH_INVITATIONS_USERNAME:AdminInv}
+      password: ${FIH_INVITATIONS_PASSWORD:Inv$admin+2026}
+      display-name: "${FIH_INVITATIONS_DISPLAY_NAME:Invitations & Badges}"
+
 
   badge:
     photo-dir: ${FIH_PHOTO_DIR:D:/Bitaka/bitaka/fih-companion/photos}
@@ -116,6 +122,15 @@ fih:
     poster-dir: ${FIH_POSTER_DIR:D:/Bitaka/bitaka/fih-companion/posters}
     poster-default: poster-default.jpg
     poster-extensions: [jpg, jpeg, png]
+
+    # ---- per-badge PDF size control -----------------------------------------
+    # The poster JPEG is the largest thing inside each ticket PDF. The panel is
+    # only ~100 mm wide, so embedding a full-res poster is wasted bytes. These
+    # cap what gets embedded (poster is downscaled + re-encoded once per batch):
+    #   600 px over 100 mm ≈ 150 dpi, q0.72 ≈ 53 KB/badge  (default, safe).
+    # For the smallest possible ZIP, lower them, e.g. 450 / 0.65 ≈ 25 KB/badge.
+    poster-embed-max-px: ${FIH_POSTER_EMBED_MAX_PX:600}
+    poster-embed-quality: ${FIH_POSTER_EMBED_QUALITY:0.72}
 
 
     show-time: ${FIH_SHOW_TIME:22:00}

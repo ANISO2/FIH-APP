@@ -1,5 +1,5 @@
 import { Routes } from '@angular/router';
-import { authGuard } from './core/auth.guard';
+import { authGuard, invitationsRouteGuard } from './core/auth.guard';
 import { ShellComponent } from './layout/shell.component';
 export const routes: Routes = [
   { path: 'login', loadComponent: () => import('./pages/login.component').then(m => m.LoginComponent) },
@@ -7,6 +7,7 @@ export const routes: Routes = [
     path: '',
     component: ShellComponent,
     canActivate: [authGuard],
+    canActivateChild: [invitationsRouteGuard],
     children: [
       { path: '', loadComponent: () => import('./pages/overview.component').then(m => m.OverviewComponent) },
       { path: 'events', loadComponent: () => import('./pages/events.component').then(m => m.EventsComponent) },

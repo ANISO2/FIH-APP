@@ -1,8 +1,6 @@
-import { Component, OnInit, signal } from '@angular/core';
-import { FormsModule } from '@angular/forms';
+import { Component, signal } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { AuthService } from '../core/auth.service';
-import { YearStore } from '../core/year-store.service';
 import { Router } from '@angular/router';
 
 interface NavItem { label: string; icon: string; path: string; }
@@ -10,7 +8,7 @@ interface NavItem { label: string; icon: string; path: string; }
 @Component({
   selector: 'app-shell',
   standalone: true,
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, FormsModule],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive],
   template: `
     <div class="min-h-screen flex">
       <!-- Barre latérale -->
@@ -28,7 +26,7 @@ interface NavItem { label: string; icon: string; path: string; }
         </div>
 
         <nav class="flex-1 px-3 py-4 space-y-1">
-          @for (item of nav; track item.path) {
+          @for (item of visibleNav(); track item.path) {
             <a [routerLink]="item.path" routerLinkActive="bg-white/15 text-white"
                [routerLinkActiveOptions]="{ exact: item.path === '' }"
                (click)="closeOnMobile()"
@@ -69,22 +67,9 @@ interface NavItem { label: string; icon: string; path: string; }
                     aria-label="Ouvrir le menu">
               <span class="msr">menu</span>
             </button>
-            <h1 class="text-lg font-semibold text-ink">FIH · Statistiques</h1>
+            <h1 class="text-lg font-semibold text-ink">{{ auth.isInvitationsOnly() ? 'FIH · Invitations & Badges' : 'FIH · Statistiques' }}</h1>
 
             <div class="flex-1"></div>
-
-            <!-- Sélecteur d'année global (3.2) -->
-            <label class="flex items-center gap-2 text-sm text-muted">
-              <span class="msr text-[20px]">calendar_month</span>
-              <select [ngModel]="years.year()" (ngModelChange)="onYearChange($event)"
-                      aria-label="Filtrer par année"
-                      class="px-3 py-2 rounded-xl border border-line bg-white text-ink outline-none focus:border-accent cursor-pointer">
-                <option [ngValue]="null">Toutes les années</option>
-                @for (y of years.years(); track y) {
-                  <option [ngValue]="y">{{ y }}</option>
-                }
-              </select>
-            </label>
           </div>
         </header>
         <main class="flex-1 px-4 sm:px-6 lg:px-8 py-6 max-w-[1400px] w-full mx-auto">
@@ -94,7 +79,7 @@ interface NavItem { label: string; icon: string; path: string; }
     </div>
   `
 })
-export class ShellComponent implements OnInit {
+export class ShellComponent {
   open = signal(false);
   nav: NavItem[] = [
     { label: 'Vue d\'ensemble', icon: 'dashboard', path: '' },
@@ -109,11 +94,18 @@ export class ShellComponent implements OnInit {
     { label: 'Portes', icon: 'sensor_door', path: 'gates' }
   ];
 
-  constructor(public auth: AuthService, public years: YearStore, private router: Router) {}
+  constructor(public auth: AuthService, private router: Router) {}
 
-  ngOnInit(): void { this.years.load(); }
-
-  onYearChange(v: number | null): void { this.years.select(v); }
+  /**
+   * Feature 1 — the restricted "Invitations & Badges only" account sees just
+   * that single nav item; everyone else sees the full menu.
+   */
+  visibleNav(): NavItem[] {
+    if (this.auth.isInvitationsOnly()) {
+      return this.nav.filter(item => item.path === 'badges');
+    }
+    return this.nav;
+  }
 
   initials(): string {
     const n = this.auth.displayName() || 'A';

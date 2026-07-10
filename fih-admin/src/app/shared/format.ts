@@ -45,6 +45,24 @@ export class FDatePipe implements PipeTransform {
   }
 }
 
+/**
+ * Comme `fdate`, mais les entrées sans date réelle (placeholder époque 1970 =
+ * type « FIH » général, non rattaché à un spectacle daté) affichent « Général »
+ * au lieu de « — ». Réservé aux vues où ce type général peut apparaître
+ * (Invitations & Badges, tourniquets, statistiques par événement).
+ */
+@Pipe({ name: 'gdate', standalone: true })
+export class GDatePipe implements PipeTransform {
+  transform(value: string | null | undefined, short = false): string {
+    const d = realDate(value);
+    if (!d) return 'Général';
+    const opts: Intl.DateTimeFormatOptions = short
+      ? { day: '2-digit', month: 'short' }
+      : { day: '2-digit', month: 'short', year: 'numeric' };
+    return d.toLocaleDateString('fr-FR', opts);
+  }
+}
+
 /** 56720 -> "56 720,000 TND" (devise tunisienne, locale fr) */
 @Pipe({ name: 'tnd', standalone: true })
 export class TndPipe implements PipeTransform {

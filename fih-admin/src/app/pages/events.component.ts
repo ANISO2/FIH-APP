@@ -1,19 +1,18 @@
-import { Component, computed, effect, signal } from '@angular/core';
+import { Component, OnInit, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { StatsService } from '../core/stats.service';
-import { YearStore } from '../core/year-store.service';
 import { EventRollup } from '../core/models';
 import { LoadingSkeletonComponent } from '../shared/loading-skeleton.component';
 import { EmptyStateComponent } from '../shared/empty-state.component';
-import { NumPipe, PctPipe, FDatePipe } from '../shared/format';
+import { NumPipe, PctPipe, GDatePipe } from '../shared/format';
 
 type SortKey = 'title' | 'date' | 'scans' | 'accepted' | 'rejected' | 'acceptanceRate';
 
 @Component({
   selector: 'app-events',
   standalone: true,
-  imports: [FormsModule, LoadingSkeletonComponent, EmptyStateComponent, NumPipe, PctPipe, FDatePipe],
+  imports: [FormsModule, LoadingSkeletonComponent, EmptyStateComponent, NumPipe, PctPipe, GDatePipe],
   template: `
     <div class="flex items-center justify-between gap-3 mb-4 flex-wrap">
       <h2 class="text-xl font-bold text-ink">Événements</h2>
@@ -49,7 +48,7 @@ type SortKey = 'title' | 'date' | 'scans' | 'accepted' | 'rejected' | 'acceptanc
               @for (e of filtered(); track e.eventId) {
                 <tr class="border-b border-line/60 hover:bg-bg cursor-pointer transition-colors" (click)="open(e)">
                   <td class="px-4 py-3 font-medium text-ink">{{ e.title }}</td>
-                  <td class="px-4 py-3 text-muted">{{ e.date | fdate }}</td>
+                  <td class="px-4 py-3 text-muted">{{ e.date | gdate }}</td>
                   <td class="px-4 py-3 text-right font-semibold">{{ e.scans | num }}</td>
                   <td class="px-4 py-3 text-right" style="color:var(--success)">{{ e.accepted | num }}</td>
                   <td class="px-4 py-3 text-right" style="color:var(--warn)">{{ e.rejected | num }}</td>
@@ -72,7 +71,7 @@ type SortKey = 'title' | 'date' | 'scans' | 'accepted' | 'rejected' | 'acceptanc
     }
   `
 })
-export class EventsComponent {
+export class EventsComponent implements OnInit {
   loading = signal(true);
   error = signal(false);
   rows = signal<EventRollup[]>([]);
@@ -97,20 +96,16 @@ export class EventsComponent {
     return list;
   });
 
-  constructor(private stats: StatsService, private years: YearStore, private router: Router) {
-    effect(() => {
-      if (!this.years.ready()) return;
-      const year = this.years.year();
-      this.fetch(year);
-    });
-  }
+  constructor(private stats: StatsService, private router: Router) {}
+
+  ngOnInit(): void { this.fetch(); }
 
   private reqId = 0;
-  private fetch(year: number | null): void {
+  private fetch(): void {
     const seq = ++this.reqId;       // 3.4 : ignore les réponses obsolètes
     this.loading.set(true);
     this.error.set(false);
-    this.stats.events(year).subscribe({
+    this.stats.events().subscribe({
       next: (r) => { if (seq !== this.reqId) return; this.rows.set(r); this.loading.set(false); },
       error: () => { if (seq !== this.reqId) return; this.error.set(true); this.loading.set(false); }
     });

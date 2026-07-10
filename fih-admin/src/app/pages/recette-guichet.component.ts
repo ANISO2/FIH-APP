@@ -1,6 +1,5 @@
-import { Component, computed, effect, signal } from '@angular/core';
+import { Component, OnInit, computed, signal } from '@angular/core';
 import { StatsService } from '../core/stats.service';
-import { YearStore } from '../core/year-store.service';
 import { RecetteGuichetSummary, RecetteGuichetDetail } from '../core/models';
 import { LoadingSkeletonComponent } from '../shared/loading-skeleton.component';
 import { EmptyStateComponent } from '../shared/empty-state.component';
@@ -21,7 +20,7 @@ import { NumPipe, TndPipe, FDatePipe } from '../shared/format';
     <div class="flex items-start justify-between gap-4 mb-5">
       <div>
         <h2 class="text-xl font-bold text-ink mb-1">Recette par guichet</h2>
-        <p class="text-sm text-muted">Recette des points de vente (guichets) · {{ years.label() }}</p>
+        <p class="text-sm text-muted">Recette des points de vente (guichets)</p>
       </div>
       <button (click)="download()" [disabled]="loading() || (summary().length === 0 && detail().length === 0)"
               class="shrink-0 inline-flex items-center gap-2 px-4 py-2 rounded-xl text-white text-sm font-medium disabled:opacity-50"
@@ -123,7 +122,7 @@ import { NumPipe, TndPipe, FDatePipe } from '../shared/format';
     }
   `
 })
-export class RecetteGuichetComponent {
+export class RecetteGuichetComponent implements OnInit {
   loading = signal(true);
   error = signal(false);
   summary = signal<RecetteGuichetSummary[]>([]);
@@ -135,23 +134,20 @@ export class RecetteGuichetComponent {
     return acc;
   });
 
-  constructor(private stats: StatsService, public years: YearStore) {
-    effect(() => {
-      if (!this.years.ready()) return;
-      this.fetch(this.years.year());
-    });
-  }
+  constructor(private stats: StatsService) {}
+
+  ngOnInit(): void { this.fetch(); }
 
   private reqId = 0;
-  private fetch(year: number | null): void {
+  private fetch(): void {
     const seq = ++this.reqId;       // 3.4 : ignore les réponses obsolètes
     this.loading.set(true);
     this.error.set(false);
-    this.stats.recetteGuichetSummary(year).subscribe({
+    this.stats.recetteGuichetSummary().subscribe({
       next: (s) => {
         if (seq !== this.reqId) return;
         this.summary.set(s);
-        this.stats.recetteGuichetDetail(year).subscribe({
+        this.stats.recetteGuichetDetail().subscribe({
           next: (d) => { if (seq !== this.reqId) return; this.detail.set(d); this.loading.set(false); },
           error: () => { if (seq !== this.reqId) return; this.error.set(true); this.loading.set(false); }
         });
@@ -180,9 +176,8 @@ export class RecetteGuichetComponent {
     const blob = new Blob(['\uFEFF' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    const y = this.years.year();
     a.href = url;
-    a.download = `recette-guichet-${y ?? 'toutes-annees'}.csv`;
+    a.download = 'recette-guichet.csv';
     a.click();
     URL.revokeObjectURL(url);
   }

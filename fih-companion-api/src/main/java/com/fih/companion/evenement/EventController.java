@@ -23,7 +23,7 @@ public class EventController {
     @GetMapping
     @Transactional(readOnly = true)
     public List<EventDto> list() {
-        return repository.findAll()
+        return repository.findVisible()
                 .stream()
                 .map(mapper::toDto)
                 .toList();

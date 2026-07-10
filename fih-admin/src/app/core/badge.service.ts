@@ -77,15 +77,27 @@ export class BadgeService {
 
   /** Trigger a browser download from a Blob response, using the server filename if present. */
   saveResponse(res: HttpResponse<Blob>, fallbackName: string): void {
-    const blob = res.body!;
+    const blob = res.body;
+    if (!blob || blob.size === 0) {
+      throw new Error('Réponse vide : aucun fichier à télécharger.');
+    }
     const cd = res.headers.get('Content-Disposition') || '';
-    const match = /filename="?([^"]+)"?/.exec(cd);
-    const name = match ? match[1] : fallbackName;
+    const match = /filename\*?=(?:UTF-8'')?"?([^\";]+)"?/i.exec(cd);
+    let name = fallbackName;
+    if (match) {
+      try { name = decodeURIComponent(match[1]); } catch { name = match[1]; }
+    }
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = name;
+    // The anchor must be in the DOM for .click() to fire in every browser, and
+    // the object URL must stay alive until the browser has started reading it —
+    // revoking it in the same tick silently cancels large (multi-MB) downloads,
+    // which is why the batch ZIP wouldn't appear while single PDFs did.
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
   }
 }
