@@ -36,11 +36,12 @@ public interface StatsRepository extends Repository<Tturnstile, Integer> {
     OverviewCountsProjection overviewCounts();
 
     @Query(value = """
-            SELECT e.titre AS "title", e.ddate AS "date", count(t.reference) AS "scans"
+            SELECT e.titre AS "title", e.ddate AS "date",
+                   count(t.reference) FILTER (WHERE t.transactionstate IS TRUE) AS "scans"
             FROM evenement e
             JOIN tturnstile t ON t.datetransaction = e.ddate
             GROUP BY e.reference, e.titre, e.ddate
-            ORDER BY count(t.reference) DESC
+            ORDER BY count(t.reference) FILTER (WHERE t.transactionstate IS TRUE) DESC
             LIMIT 1
             """, nativeQuery = true)
     BusiestEventProjection busiestEvent();
@@ -89,8 +90,8 @@ public interface StatsRepository extends Repository<Tturnstile, Integer> {
                    count(t.reference) AS "scans",
                    count(t.reference) FILTER (WHERE t.transactionstate IS TRUE)        AS "accepted",
                    count(t.reference) FILTER (WHERE t.transactionstate IS NOT TRUE)    AS "rejected",
-                   count(t.reference) FILTER (WHERE lower(t.porte) = 'public')         AS "publicScans",
-                   count(t.reference) FILTER (WHERE lower(t.porte) = 'vip')            AS "vipScans"
+                   count(t.reference) FILTER (WHERE lower(t.porte) = 'public' AND t.transactionstate IS TRUE) AS "publicScans",
+                   count(t.reference) FILTER (WHERE lower(t.porte) = 'vip'    AND t.transactionstate IS TRUE) AS "vipScans"
             FROM evenement e
             LEFT JOIN tturnstile t ON t.datetransaction = e.ddate
             GROUP BY e.reference, e.titre, e.ddate
@@ -103,8 +104,8 @@ public interface StatsRepository extends Repository<Tturnstile, Integer> {
                    count(t.reference) AS "scans",
                    count(t.reference) FILTER (WHERE t.transactionstate IS TRUE)        AS "accepted",
                    count(t.reference) FILTER (WHERE t.transactionstate IS NOT TRUE)    AS "rejected",
-                   count(t.reference) FILTER (WHERE lower(t.porte) = 'public')         AS "publicScans",
-                   count(t.reference) FILTER (WHERE lower(t.porte) = 'vip')            AS "vipScans"
+                   count(t.reference) FILTER (WHERE lower(t.porte) = 'public' AND t.transactionstate IS TRUE) AS "publicScans",
+                   count(t.reference) FILTER (WHERE lower(t.porte) = 'vip'    AND t.transactionstate IS TRUE) AS "vipScans"
             FROM evenement e
             LEFT JOIN tturnstile t ON t.datetransaction = e.ddate
             WHERE e.reference = :id
@@ -130,6 +131,7 @@ public interface StatsRepository extends Repository<Tturnstile, Integer> {
             FROM tturnstile t
             JOIN evenement e ON e.ddate = t.datetransaction
             WHERE e.reference = :id AND t.heuretransaction IS NOT NULL
+              AND t.transactionstate IS TRUE
             GROUP BY extract(hour FROM t.heuretransaction)::int
             ORDER BY 1
             """, nativeQuery = true)
@@ -251,8 +253,8 @@ public interface StatsRepository extends Repository<Tturnstile, Integer> {
             tx AS (
               SELECT COALESCE(b.evenement, v.evenement) AS evenement,
                      COALESCE(b.modelebillet, v.modelebillet) AS modelebillet,
-                     count(*) FILTER (WHERE t.billet IS NOT NULL)  AS billet_tx,
-                     count(*) FILTER (WHERE t.voucher IS NOT NULL) AS voucher_tx
+                     count(*) FILTER (WHERE t.billet IS NOT NULL  AND t.transactionstate IS TRUE) AS billet_tx,
+                     count(*) FILTER (WHERE t.voucher IS NOT NULL AND t.transactionstate IS TRUE) AS voucher_tx
               FROM tturnstile t
               LEFT JOIN billet b  ON b.numeroserie = t.billet
               LEFT JOIN voucher v ON v.numeroserie = t.voucher
