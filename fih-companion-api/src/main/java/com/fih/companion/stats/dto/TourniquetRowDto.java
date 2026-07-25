@@ -8,6 +8,7 @@ public record TourniquetRowDto(
         long voucherCodes,
         long audience,
         long billetTransactions,
-        long voucherTransactions
+        long voucherTransactions,
+        String category           // "INVITATION" | "GRADINS" | "AUTRE"
 ) {
 }

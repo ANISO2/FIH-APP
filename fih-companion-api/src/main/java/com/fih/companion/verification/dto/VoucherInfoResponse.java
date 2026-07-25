@@ -16,13 +16,21 @@ public record VoucherInfoResponse(
         Boolean vendu,
         LocalDate dateVente,
         Integer accessCounter,
-        String message
+        String message,
+        // ---- external TICKET-VERIFY payload (festivaldehammamet.com) ----------
+        Boolean used,
+        String usedDate,
+        String ticket,
+        String ticketCin,
+        String prenom,
+        String nom
 ) {
      public static VoucherInfoResponse pendingIntegration(String code) {
         return new VoucherInfoResponse(
                 "PENDING_INTEGRATION", "EXTERNAL_SERVICE", code,
                 null, null, null, null, null, null, null, null, null,
                 "Vérification déléguée au service externe (équipe billetterie) — "
-                        + "intégration à venir. Le contrat de réponse est déjà figé.");
+                        + "intégration à venir. Le contrat de réponse est déjà figé.",
+                null, null, null, null, null, null);
     }
 }

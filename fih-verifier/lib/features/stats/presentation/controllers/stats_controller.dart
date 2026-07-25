@@ -5,15 +5,21 @@ import 'package:flutter/foundation.dart';
 import '../../../../core/network/api_exception.dart';
 import '../../data/stats_repository.dart';
 import '../../domain/stats_models.dart';
+import '../../domain/tourniquet_models.dart';
 
 /// Today's numbers, derived from the per-day entries feed.
 class TodayStats {
   final DateTime day;   // the day actually shown
   final bool isToday;   // false when we fell back to the latest active day
-  final int entries;    // accepted passages
+  final int entries;    // accepted passages (all types)
   final int rejected;
   final int total;      // all scans that day
   final double rate;    // acceptance %, 0..100
+
+  // Per-type entries for the shown day (Invitation + Billet Gradins). Null when
+  // the tourniquet feed couldn't be loaded — the dashboard then hides the split.
+  final int? invitationEntries;
+  final int? gradinsEntries;
 
   const TodayStats({
     required this.day,
@@ -22,7 +28,12 @@ class TodayStats {
     required this.rejected,
     required this.total,
     required this.rate,
+    this.invitationEntries,
+    this.gradinsEntries,
   });
+
+  bool get hasTypeBreakdown => invitationEntries != null && gradinsEntries != null;
+  int get twoTypesEntries => (invitationEntries ?? 0) + (gradinsEntries ?? 0);
 }
 
 sealed class StatsUiState {
@@ -78,12 +89,20 @@ class StatsController extends ChangeNotifier {
     _timer = Timer.periodic(pollInterval, (_) => refresh());
   }
 
-  Future<void> refresh() async {
+  Future<void> refresh({bool force = false}) async {
     if (_inFlight) return;
     _inFlight = true;
     try {
       final days = await _repo.entriesByDay(null);
-      _state = StatsLoaded(_buildToday(days));
+      // Per-type entries for the shown day (best-effort). `force` (the Actualiser
+      // button) bypasses the server's short cache so counts update instantly.
+      List<TourniquetEvent>? tq;
+      try {
+        tq = await _repo.tourniquets(null, refresh: force);
+      } catch (_) {
+        tq = null; // non-fatal: keep the all-types dashboard, hide the split
+      }
+      _state = StatsLoaded(_buildToday(days, tq));
       lastUpdated = DateTime.now();
       offlineHint = false;
     } on ApiException catch (e) {
@@ -117,9 +136,11 @@ class StatsController extends ChangeNotifier {
     notifyListeners();
   }
 
-  TodayStats _buildToday(List<EntryByDay> days) {
+  TodayStats _buildToday(List<EntryByDay> days, List<TourniquetEvent>? tq) {
     final now = DateTime.now();
     bool isSameDay(DateTime d) => d.year == now.year && d.month == now.month && d.day == now.day;
+    bool sameDate(DateTime? a, DateTime b) =>
+        a != null && a.year == b.year && a.month == b.month && a.day == b.day;
 
     final sorted = days.where((d) => d.date != null).toList()
       ..sort((a, b) => a.date!.compareTo(b.date!));
@@ -145,6 +166,14 @@ class StatsController extends ChangeNotifier {
       );
     }
 
+    // Per-type entries for the chosen day, summed over that day's spectacles.
+    int? invit, gradins;
+    if (tq != null) {
+      final sameDay = tq.where((e) => sameDate(e.eventDate, chosen.date!));
+      invit = sameDay.fold<int>(0, (s, e) => s + e.entriesForCategory('INVITATION'));
+      gradins = sameDay.fold<int>(0, (s, e) => s + e.entriesForCategory('GRADINS'));
+    }
+
     final total = chosen.scans;
     final rate = total == 0 ? 0.0 : (chosen.accepted / total) * 100.0;
     return TodayStats(
@@ -154,6 +183,8 @@ class StatsController extends ChangeNotifier {
       rejected: chosen.rejected,
       total: total,
       rate: rate,
+      invitationEntries: invit,
+      gradinsEntries: gradins,
     );
   }
 

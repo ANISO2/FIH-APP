@@ -15,7 +15,9 @@ class StatsRepository {
   Future<List<EntryByDay>> entriesByDay(int? year) => _remote.entriesByDay(year);
 
   /// Backoffice "Statistique des tourniquets" feed for the today-details screen.
-  Future<List<TourniquetEvent>> tourniquets(int? year) => _remote.tourniquets(year);
+  /// [refresh] true bypasses the server cache (the "Actualiser" button).
+  Future<List<TourniquetEvent>> tourniquets(int? year, {bool refresh = false}) =>
+      _remote.tourniquets(year, refresh: refresh);
 
   /// Full global snapshot (kept for reuse; not used by the today view).
   Future<StatsDashboard> dashboard(int? year) async {

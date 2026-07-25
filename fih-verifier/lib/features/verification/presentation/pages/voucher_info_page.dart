@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../../../../app/theme.dart';
-import '../../../../core/utils/formatters.dart';
 import '../../domain/voucher_info.dart';
 
-/// Feature 1 — commercial info about a paid voucher, from the EXTERNAL service.
-/// Deliberately NOT a verdict screen: no pass/no-pass, no alarm — verification
-/// isn't ours (source = EXTERNAL_SERVICE). Today the service is a stub, so the
-/// star of the show is a first-class "Intégration à venir" state, not an error.
+/// Feature 1 — holder / used status for a scanned voucher, from the EXTERNAL
+/// ticket-verify service. Not a verdict screen (no pass/no-pass): verification
+/// isn't ours. On success we show the returned info; on failure we show a plain
+/// French message instead of the old "intégration à venir" placeholder.
 class VoucherInfoView extends StatelessWidget {
   final VoucherInfo info;
   final VoidCallback onNext;
@@ -38,56 +37,104 @@ class VoucherInfoView extends StatelessWidget {
   }
 
   Widget _body(BuildContext context) {
-    if (info.isPending) {
-      return _EmptyState(
-        icon: Icons.cloud_sync_rounded,
-        title: 'Intégration à venir',
-        message: info.message ??
-            'Vérification déléguée au service externe (équipe billetterie). '
-                'Le contrat de réponse est déjà figé, l\'écran est prêt.',
-      );
-    }
     if (info.isNotFound) {
       return const _EmptyState(
         icon: Icons.search_off_rounded,
-        title: 'Voucher introuvable',
+        title: 'Billet introuvable',
         message: 'Le service externe ne connaît pas ce code.',
       );
     }
-    // status == OK
+    if (info.isUnavailable) {
+      return _EmptyState(
+        icon: Icons.cloud_off_rounded,
+        title: 'Service indisponible',
+        message: info.message ??
+            'Le service de vérification est momentanément indisponible. Réessayez.',
+      );
+    }
+    // OK or ERROR — both may carry holder data; ERROR leads with the message.
     return SingleChildScrollView(
       padding: const EdgeInsets.all(Gap.md),
-      child: Container(
-        padding: const EdgeInsets.all(Gap.md),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (info.eventTitle != null)
-              Text(info.eventTitle!,
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
-            if (info.eventDate != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 2, bottom: Gap.sm),
-                child: Text(Formatters.longDate(info.eventDate),
-                    style: TextStyle(color: Colors.black.withValues(alpha: 0.6))),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _usedBanner(),
+          if (info.isError && (info.message?.isNotEmpty ?? false))
+            Container(
+              margin: const EdgeInsets.only(bottom: Gap.md),
+              padding: const EdgeInsets.all(Gap.md),
+              decoration: BoxDecoration(
+                color: AppColors.verdictStop.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(14),
               ),
-            const Divider(height: Gap.lg),
-            _kv('Modèle', info.model ?? '—'),
-            _kv('Prix', Formatters.money(info.prix)),
-            _kv('Vendu', info.vendu == null ? '—' : (info.vendu! ? 'Oui' : 'Non')),
-            _kv('Date de vente', Formatters.shortDate(info.dateVente)),
-            _kv('Compteur d\'accès', info.accessCounter?.toString() ?? '—'),
-            _kv('N° série', info.numeroserie ?? '—'),
-            _kv('Code-barres', info.codebarre ?? '—'),
-          ],
-        ),
+              child: Row(
+                children: [
+                  const Icon(Icons.error_outline_rounded, color: AppColors.verdictStop),
+                  const SizedBox(width: Gap.sm),
+                  Expanded(
+                    child: Text(info.message!,
+                        style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.verdictStop)),
+                  ),
+                ],
+              ),
+            ),
+          Container(
+            padding: const EdgeInsets.all(Gap.md),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (info.holder != null) ...[
+                  Text(info.holder!,
+                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+                  const Divider(height: Gap.lg),
+                ],
+                _kv('Utilisé', info.used == null ? '—' : (info.used! ? 'Oui' : 'Non')),
+                _kv("Date d'utilisation", _orDash(info.usedDate)),
+                _kv('Ticket', _orDash(info.ticket)),
+                _kv('CIN', _orDash(info.ticketCin)),
+                _kv('Prénom', _orDash(info.prenom)),
+                _kv('Nom', _orDash(info.nom)),
+                if (info.code != null) _kv('Code', info.code!),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
+
+  /// Prominent used / not-used chip so an operator sees re-entry at a glance.
+  Widget _usedBanner() {
+    if (info.used == null) return const SizedBox.shrink();
+    final used = info.used!;
+    final color = used ? AppColors.verdictWarn : AppColors.verdictValid;
+    return Container(
+      margin: const EdgeInsets.only(bottom: Gap.md),
+      padding: const EdgeInsets.symmetric(vertical: Gap.sm, horizontal: Gap.md),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          Icon(used ? Icons.history_toggle_off_rounded : Icons.check_circle_rounded, color: color),
+          const SizedBox(width: Gap.sm),
+          Text(used ? 'Déjà utilisé' : 'Non utilisé',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: color)),
+          if (used && (info.usedDate?.isNotEmpty ?? false)) ...[
+            const Spacer(),
+            Text(info.usedDate!, style: TextStyle(fontSize: 12, color: color)),
+          ],
+        ],
+      ),
+    );
+  }
+
+  static String _orDash(String? v) => (v == null || v.trim().isEmpty) ? '—' : v;
 
   Widget _kv(String k, String v) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 5),

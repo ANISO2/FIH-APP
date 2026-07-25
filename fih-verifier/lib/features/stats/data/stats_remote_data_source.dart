@@ -38,9 +38,10 @@ class StatsRemoteDataSource {
 
   /// Backoffice "Statistique des tourniquets" feed (per event + per model). Used
   /// by the mobile "today details" screen. Already device-readable — no new
-  /// backend endpoint.
-  Future<List<TourniquetEvent>> tourniquets(int? year) =>
-      _list(ApiEndpoints.statsTourniquets(), year, TourniquetEvent.fromJson);
+  /// backend endpoint. This feed is cached server-side (short TTL); pass
+  /// [refresh] true (the "Actualiser" button) to bypass it and get live data.
+  Future<List<TourniquetEvent>> tourniquets(int? year, {bool refresh = false}) =>
+      _list(ApiEndpoints.statsTourniquets(), year, TourniquetEvent.fromJson, refresh: refresh);
 
   Future<T> _obj<T>(String url, int? year, T Function(Map<String, dynamic>) parse) async {
     try {
@@ -53,9 +54,10 @@ class StatsRemoteDataSource {
     }
   }
 
-  Future<List<T>> _list<T>(String url, int? year, T Function(Map<String, dynamic>) parse) async {
+  Future<List<T>> _list<T>(String url, int? year, T Function(Map<String, dynamic>) parse,
+      {bool refresh = false}) async {
     try {
-      final res = await _dio.get<List<dynamic>>(url, queryParameters: _q(year));
+      final res = await _dio.get<List<dynamic>>(url, queryParameters: _q(year, refresh: refresh));
       return (res.data ?? const [])
           .map((e) => parse(e as Map<String, dynamic>))
           .toList(growable: false);
@@ -64,5 +66,10 @@ class StatsRemoteDataSource {
     }
   }
 
-  Map<String, dynamic>? _q(int? year) => year == null ? null : {'year': year};
+  Map<String, dynamic>? _q(int? year, {bool refresh = false}) {
+    final q = <String, dynamic>{};
+    if (year != null) q['year'] = year;
+    if (refresh) q['refresh'] = 'true';
+    return q.isEmpty ? null : q;
+  }
 }

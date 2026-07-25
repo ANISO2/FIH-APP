@@ -1,5 +1,6 @@
 package com.fih.companion.stats;
 
+import com.fih.companion.badge.BadgeProperties;
 import com.fih.companion.stats.dto.*;
 import com.fih.companion.stats.projection.*;
 import org.springframework.beans.factory.annotation.Value;
@@ -20,6 +21,8 @@ import java.util.function.Supplier;
 public class StatsService {
 
     private final StatsRepository repo;
+    private final BadgeProperties badgeProperties;
+    private final StatsProperties statsProperties;
 
     private final long statsCacheTtlSeconds;
     private final ConcurrentHashMap<String, CacheEntry> statsCache = new ConcurrentHashMap<>();
@@ -27,8 +30,12 @@ public class StatsService {
     private record CacheEntry(long expiresAtMillis, Object value) {}
 
     public StatsService(StatsRepository repo,
+                        BadgeProperties badgeProperties,
+                        StatsProperties statsProperties,
                         @Value("${fih.stats.cache-ttl-seconds:${fih.recette.cache-ttl-seconds:30}}") long statsCacheTtlSeconds) {
         this.repo = repo;
+        this.badgeProperties = badgeProperties;
+        this.statsProperties = statsProperties;
         this.statsCacheTtlSeconds = statsCacheTtlSeconds;
     }
 
@@ -172,12 +179,14 @@ public class StatsService {
         List<long[]> totalsByIndex = new java.util.ArrayList<>(); // [audience, billetTx, voucherTx]
         List<Object[]> headByIndex = new java.util.ArrayList<>();  // [eventId, title, date]
 
-        for (TourniquetProjection p : repo.tourniquets()) {
+        var gradinsIds = statsProperties.gradinsModelSet();
+        for (TourniquetProjection p : repo.tourniquets(gradinsIds)) {
             long audienceRow = p.getBilletCodes() + p.getVoucherCodes();
+            String category = classify(p.getModelId(), gradinsIds);
             TourniquetRowDto row = new TourniquetRowDto(
                     p.getModelId(), p.getModelName(),
                     p.getBilletCodes(), p.getVoucherCodes(), audienceRow,
-                    p.getBilletTx(), p.getVoucherTx());
+                    p.getBilletTx(), p.getVoucherTx(), category);
 
             Integer idx = indexByEvent.get(p.getEventId());
             if (idx == null) {
@@ -269,6 +278,17 @@ public class StatsService {
             return 0.0;
         }
         return Math.round((accepted * 1000.0) / total) / 10.0;
+    }
+
+    /** Ticket-type family used by the mobile "2 types" stats scoping. */
+    private String classify(Integer modelId, java.util.Set<Integer> gradinsIds) {
+        if (modelId != null && gradinsIds.contains(modelId)) {
+            return "GRADINS";
+        }
+        if (badgeProperties.isInvitationModel(modelId)) {
+            return "INVITATION";
+        }
+        return "AUTRE";
     }
 
     private LocalDate toLocalDate(Date d) {

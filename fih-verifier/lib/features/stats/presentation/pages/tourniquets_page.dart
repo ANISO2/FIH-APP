@@ -38,11 +38,12 @@ class _TourniquetsPageState extends State<TourniquetsPage> {
     _load();
   }
 
-  void _load() {
-    _future = _repo.tourniquets(widget.day.year);
+  void _load({bool refresh = false}) {
+    _future = _repo.tourniquets(widget.day.year, refresh: refresh);
   }
 
-  void _reload() => setState(_load);
+  // "Actualiser" must bypass the server's short cache so new entries show at once.
+  void _reload() => setState(() => _load(refresh: true));
 
   bool _sameDay(DateTime? a, DateTime b) =>
       a != null && a.year == b.year && a.month == b.month && a.day == b.day;
@@ -156,23 +157,29 @@ class _TourniquetsPageState extends State<TourniquetsPage> {
                         style: TextStyle(fontSize: 13, color: Colors.black.withValues(alpha: 0.5))),
                 ],
               ),
+              const SizedBox(height: 2),
+              Text('Invitation + Billet Gradins',
+                  style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.primary.withValues(alpha: 0.85))),
               const SizedBox(height: Gap.sm),
-              // Header metric band (matches the backoffice top row).
+              // Header metric band — scoped to the 2 types (matches the backoffice row).
               Wrap(
                 spacing: Gap.md,
                 runSpacing: Gap.sm,
                 children: [
-                  _metric('Émis', _n(e.audience)),
-                  _metric('Transactions Billets', _n(e.transactionsBillets)),
-                  _metric('Transactions Vouchers', _n(e.transactionsVouchers)),
-                  _metric('Entrées', _n(e.tourniquets)),
-                  _presenceMetric(e.presence),
+                  _metric('Émis', _n(e.audience2)),
+                  _metric('Transactions Billets', _n(e.billets2)),
+                  _metric('Transactions Vouchers', _n(e.vouchers2)),
+                  _metric('Entrées', _n(e.tourniquets2)),
+                  _presenceMetric(e.presence2),
                 ],
               ),
               const SizedBox(height: Gap.md),
               const Divider(height: 1),
               const SizedBox(height: Gap.sm),
-              _modelTable(e.rows),
+              _modelTable(e),
             ],
           ),
         ),
@@ -225,7 +232,11 @@ class _TourniquetsPageState extends State<TourniquetsPage> {
   static const double _wName = 132;
   static const double _wNum = 62;
 
-  Widget _modelTable(List<TourniquetRow> rows) {
+  Widget _modelTable(TourniquetEvent e) {
+    final rows = e.countedRows; // the 2 types only
+    // All-types totals (across every model) for the footer line.
+    final billetCodesAll = e.rows.fold<int>(0, (s, r) => s + r.billetCodes);
+    final voucherCodesAll = e.rows.fold<int>(0, (s, r) => s + r.voucherCodes);
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Column(
@@ -252,21 +263,44 @@ class _TourniquetsPageState extends State<TourniquetsPage> {
             ],
           ),
           const Divider(height: 12),
-          // Data rows.
-          for (final r in rows)
+          // Data rows — Invitation + Billet Gradins.
+          if (rows.isEmpty)
             Padding(
-              padding: const EdgeInsets.symmetric(vertical: 3),
-              child: Row(
-                children: [
-                  _cell(r.modelName, _wName, align: TextAlign.left, bold: true),
-                  _cell(_n(r.billetCodes), _wNum),
-                  _cell(_n(r.voucherCodes), _wNum),
-                  _cell(_n(r.audience), _wNum),
-                  _cell(_n(r.billetTransactions), _wNum, color: AppColors.primary),
-                  _cell(_n(r.voucherTransactions), _wNum, color: AppColors.verdictWarn),
-                ],
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Text('Aucun billet Invitation / Gradins ce jour.',
+                  style: TextStyle(fontSize: 12, color: Colors.black.withValues(alpha: 0.5))),
+            )
+          else
+            for (final r in rows)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 3),
+                child: Row(
+                  children: [
+                    _cell(r.modelName, _wName, align: TextAlign.left, bold: true),
+                    _cell(_n(r.billetCodes), _wNum),
+                    _cell(_n(r.voucherCodes), _wNum),
+                    _cell(_n(r.audience), _wNum),
+                    _cell(_n(r.billetTransactions), _wNum, color: AppColors.primary),
+                    _cell(_n(r.voucherTransactions), _wNum, color: AppColors.verdictWarn),
+                  ],
+                ),
               ),
+          // All-types total (every model, incl. badges / cartes / pass…).
+          const Divider(height: 12),
+          Container(
+            color: AppColors.surface,
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(
+              children: [
+                _cell('Total (tous types)', _wName, align: TextAlign.left, bold: true),
+                _cell(_n(billetCodesAll), _wNum, bold: true),
+                _cell(_n(voucherCodesAll), _wNum, bold: true),
+                _cell(_n(e.audience), _wNum, bold: true),
+                _cell(_n(e.transactionsBillets), _wNum, bold: true, color: AppColors.primary),
+                _cell(_n(e.transactionsVouchers), _wNum, bold: true, color: AppColors.verdictWarn),
+              ],
             ),
+          ),
         ],
       ),
     );

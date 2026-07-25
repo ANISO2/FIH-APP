@@ -46,7 +46,7 @@ public class SecurityConfig {
                                            CorsLoggingFilter corsLoggingFilter) throws Exception {
         ConsoleLog.log("SECURITY", "building filter chain — order: CorsLoggingFilter -> Spring CORS "
                 + "-> DeviceTokenFilter -> JwtAuthFilter -> authorization rules. "
-                + "Public: OPTIONS/**, /api/auth/login, /api/events/**, /api/diagnostics/**. "
+                + "Public: OPTIONS/**, /error, /api/auth/login, /api/events/**, /api/diagnostics/**. "
                 + "DEVICE or ADMIN: /api/verify/**, GET mobile stats. "
                 + "ADMIN or INVITATIONS: /api/badges/**, /api/invitations/** (Invitations & Badges section). "
                 + "ADMIN only: /api/stats/** (overview, recette, verification, ...).");
@@ -61,6 +61,29 @@ public class SecurityConfig {
                         // if it is not permitted, the whole request is blocked and the user
                         // appears to be "logged out" / the page just errors.
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                        // Let the ERROR dispatch through WITHOUT auth.
+                        //
+                        // When any endpoint 404s or throws, Spring FORWARDS the request to
+                        // /error. That forward is a fresh ERROR dispatch, and OncePerRequestFilter
+                        // (which JwtAuthFilter, DeviceTokenFilter and CorsLoggingFilter all extend)
+                        // returns true from shouldNotFilterErrorDispatch() by default — so
+                        // JwtAuthFilter does NOT run on it. With STATELESS sessions no
+                        // SecurityContext is restored either, so /error arrives ANONYMOUS.
+                        //
+                        // Without this line /error fell to .anyRequest().authenticated(), was
+                        // denied as anonymous, and an anonymous denial invokes the
+                        // authenticationEntryPoint => 401. Result: EVERY 404 and EVERY 500 was
+                        // rewritten into "401 Unauthorized" — even though the JWT filter had
+                        // already logged DECISION=AUTHENTICATED for the original request. The
+                        // Angular interceptor then treated that 401 as a dead session, called
+                        // logout() and bounced to /login: the "login freezes -> back to login"
+                        // loop, with the real error (missing mapping / server exception)
+                        // completely hidden.
+                        //
+                        // Permitting /error does not expose anything new: it only lets the real
+                        // status code (404, 500, ...) and Spring's standard error body reach the
+                        // caller instead of a misleading 401.
+                        .requestMatchers("/error").permitAll()
                         .requestMatchers("/api/auth/login").permitAll()
                         .requestMatchers("/api/events/**", "/api/diagnostics/**").permitAll()
                         .requestMatchers("/api/verify/**").hasAnyRole("DEVICE", "ADMIN")

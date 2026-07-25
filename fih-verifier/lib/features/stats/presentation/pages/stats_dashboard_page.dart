@@ -62,7 +62,7 @@ class _StatsDashboardPageState extends State<StatsDashboardPage> {
           ListenableBuilder(
             listenable: _c,
             builder: (context, _) => IconButton(
-              onPressed: _c.refresh,
+              onPressed: () => _c.refresh(force: true),
               icon: const Icon(Icons.refresh_rounded),
               tooltip: 'Actualiser',
             ),
@@ -144,7 +144,7 @@ class _StatsDashboardPageState extends State<StatsDashboardPage> {
               Text(message, textAlign: TextAlign.center),
               const SizedBox(height: Gap.md),
               FilledButton.icon(
-                onPressed: _c.refresh,
+                onPressed: () => _c.refresh(force: true),
                 icon: const Icon(Icons.refresh_rounded),
                 label: const Text('Réessayer'),
                 style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
@@ -194,9 +194,19 @@ class _StatsDashboardPageState extends State<StatsDashboardPage> {
               children: [
                 Text(t.isToday ? "Entrées aujourd'hui" : 'Entrées (${_dm.format(t.day)})',
                     style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600)),
+                if (t.hasTypeBreakdown)
+                  const Text('Invitation + Billet Gradins',
+                      style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w600)),
                 const SizedBox(height: 4),
-                Text(_n(t.entries),
+                Text(_n(t.hasTypeBreakdown ? t.twoTypesEntries : t.entries),
                     style: const TextStyle(color: Colors.white, fontSize: 44, fontWeight: FontWeight.w800)),
+                if (t.hasTypeBreakdown)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                        'Invitation ${_n(t.invitationEntries!)}  ·  Gradins ${_n(t.gradinsEntries!)}',
+                        style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
+                  ),
                 const SizedBox(height: 2),
                 Text(_long.format(t.day),
                     style: const TextStyle(color: Colors.white70, fontSize: 12)),
@@ -223,7 +233,7 @@ class _StatsDashboardPageState extends State<StatsDashboardPage> {
           children: [
             Expanded(child: _kpi('Refusés', _n(t.rejected), Icons.block_rounded, AppColors.verdictStop)),
             const SizedBox(width: Gap.sm),
-            Expanded(child: _kpi('Total scans', _n(t.total), Icons.qr_code_rounded, AppColors.primary)),
+            Expanded(child: _kpi('Total (tous types)', _n(t.total), Icons.qr_code_rounded, AppColors.primary)),
             const SizedBox(width: Gap.sm),
             Expanded(child: _kpi('Taux', '${t.rate.toStringAsFixed(1)} %', Icons.verified_rounded, AppColors.verdictValid)),
           ],

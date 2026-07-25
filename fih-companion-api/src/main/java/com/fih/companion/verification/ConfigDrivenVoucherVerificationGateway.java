@@ -100,14 +100,16 @@ public class ConfigDrivenVoucherVerificationGateway implements VoucherVerificati
                 ext.vendu(),
                 ext.dateVente(),
                 ext.accessCounter(),
-                ext.message());
+                ext.message(),
+                null, null, null, null, null, null);
     }
 
     private VoucherInfoResponse notFound(String code) {
         return new VoucherInfoResponse(
                 "NOT_FOUND", "EXTERNAL_SERVICE", code,
                 null, null, null, null, null, null, null, null, null,
-                "Voucher introuvable côté service externe.");
+                "Voucher introuvable côté service externe.",
+                null, null, null, null, null, null);
     }
 
 
@@ -115,7 +117,8 @@ public class ConfigDrivenVoucherVerificationGateway implements VoucherVerificati
         return new VoucherInfoResponse(
                 "PENDING_INTEGRATION", "EXTERNAL_SERVICE", code,
                 null, null, null, null, null, null, null, null, null,
-                "Service de vérification voucher momentanément indisponible. Réessayez.");
+                "Service de vérification voucher momentanément indisponible. Réessayez.",
+                null, null, null, null, null, null);
     }
 
     // ------------------------------------------------------------- http client

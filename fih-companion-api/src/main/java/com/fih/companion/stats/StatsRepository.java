@@ -242,12 +242,25 @@ public interface StatsRepository extends Repository<Tturnstile, Integer> {
 
     @Query(value = """
             WITH codes AS (
+              -- "Émis" = generated codes, EXCEPT for the Billet Gradins models
+              -- (configured by fih.stats.gradins-model-ids) where only tickets
+              -- actually SOLD (vendu) are counted.
+              --
+              -- CAUTION when editing this comment. Spring Data JPA parses the RAW
+              -- query text and does NOT strip SQL comments, so whatever is written
+              -- here is still scanned as query syntax. Never put a colon-prefixed
+              -- parameter name or a lone apostrophe in this block. The first is
+              -- read as an extra binding and silently renames the real ones. The
+              -- second opens a quoted range that never closes and stops the whole
+              -- application from starting.
               SELECT evenement, modelebillet,
-                     count(*) FILTER (WHERE kind = 'BILLET')  AS billet_codes,
-                     count(*) FILTER (WHERE kind = 'VOUCHER') AS voucher_codes
-              FROM (SELECT evenement, modelebillet, 'BILLET' AS kind FROM billet
+                     count(*) FILTER (WHERE kind = 'BILLET'
+                       AND (modelebillet NOT IN (:gradinsIds) OR vendu))  AS billet_codes,
+                     count(*) FILTER (WHERE kind = 'VOUCHER'
+                       AND (modelebillet NOT IN (:gradinsIds) OR vendu))  AS voucher_codes
+              FROM (SELECT evenement, modelebillet, 'BILLET' AS kind, vendu FROM billet
                     UNION ALL
-                    SELECT evenement, modelebillet, 'VOUCHER' FROM voucher) ac
+                    SELECT evenement, modelebillet, 'VOUCHER', vendu FROM voucher) ac
               GROUP BY evenement, modelebillet
             ),
             tx AS (
@@ -272,7 +285,7 @@ public interface StatsRepository extends Repository<Tturnstile, Integer> {
             JOIN modelebillet m ON m.reference = COALESCE(c.modelebillet, t.modelebillet)
             ORDER BY e.ddate, e.titre, m.modele
             """, nativeQuery = true)
-    List<TourniquetProjection> tourniquets();
+    List<TourniquetProjection> tourniquets(@Param("gradinsIds") java.util.Collection<Integer> gradinsIds);
 
     // ------------------------------------------------- Analyse des rejets (§5 / Part C)
 

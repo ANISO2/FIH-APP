@@ -7,15 +7,36 @@ import { RecetteSummary, RecetteEventHeader, RecetteModelRow } from '../core/mod
 import { LoadingSkeletonComponent } from '../shared/loading-skeleton.component';
 import { EmptyStateComponent } from '../shared/empty-state.component';
 import { ChartCardComponent } from '../shared/chart-card.component';
-import { SERIES_COLORS } from '../shared/echarts-theme';
-import { NumPipe, TndPipe, PctPipe, FDatePipe } from '../shared/format';
+import { BRAND, SERIES_COLORS } from '../shared/echarts-theme';
+import { NumPipe, TndPipe, PctPipe, FDatePipe, realDate } from '../shared/format';
 
-type SummaryKey = 'eventTitle' | 'billet' | 'voucher' | 'total';
+/** One calendar day of revenue, aggregated client-side from the résumé rows. */
+interface DailyRow {
+  date: string;
+  billet: number;
+  voucher: number;
+  total: number;
+  events: string[];
+}
+
+type SummaryKey = 'eventDate' | 'eventTitle' | 'billet' | 'voucher' | 'total';
 type ViewMode = 'chart' | 'table';
 
 /** Format a number as TND with fr grouping — used inside ECharts tooltips/labels. */
 function tnd(v: number): string {
   return (v || 0).toLocaleString('fr-FR', { maximumFractionDigits: 0 }) + ' TND';
+}
+
+/** "2025-07-29" -> "29 juil." — libellé court de l'axe des jours. */
+function shortDay(iso: string): string {
+  const d = realDate(iso);
+  return d ? d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }) : '—';
+}
+
+/** "2025-07-29" -> "mardi 29 juillet 2025" — en-tête d'infobulle / sous-titre. */
+function longDay(iso: string): string {
+  const d = realDate(iso);
+  return d ? d.toLocaleDateString('fr-FR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }) : '—';
 }
 
 /**
@@ -94,6 +115,56 @@ function tnd(v: number): string {
     } @else {
 
       <!-- ============ VUE TABLEAU ============ -->
+
+      <!-- Bandeau Total général — remonté du bas de page vers le haut : c'est le
+           chiffre qu'on vient chercher en premier, il n'a pas à se mériter après
+           34 panneaux. Cliquable (même geste que la détaillée) : déplie la
+           recette par jour. Il suit le filtre de recherche de la détaillée, d'où
+           la mention « (filtré) ». -->
+      <div class="surface-card overflow-hidden mb-5">
+        <button class="hero w-full text-left px-5 py-4 flex flex-wrap items-center gap-x-8 gap-y-4 hover:bg-bg transition-colors"
+                (click)="toggleDaily()" [attr.aria-expanded]="dailyOpen()"
+                [attr.aria-label]="dailyOpen() ? 'Masquer la recette par jour' : 'Afficher la recette par jour'">
+          <span class="msr text-[22px] text-muted transition-transform shrink-0" [class.rot]="dailyOpen()">chevron_right</span>
+
+          <span class="mr-auto">
+            <span class="block text-[11px] font-semibold uppercase tracking-wider text-muted">
+              Total général{{ query() ? ' (filtré)' : '' }}
+            </span>
+            <span class="block text-3xl font-bold tabular leading-tight mt-0.5" style="color:var(--primary)">
+              {{ grandDetail().recette | tnd }}
+            </span>
+            <span class="flex items-center gap-1 text-xs text-muted mt-1">
+              <span class="msr text-[15px]">stacked_bar_chart</span>
+              {{ dailyOpen() ? 'Masquer la recette par jour' : 'Voir la recette par jour' }}
+            </span>
+          </span>
+
+          <span class="kpi"><span class="k">Généré</span><span class="v">{{ grandDetail().genere | num }}</span></span>
+          <span class="kpi"><span class="k">Vendu</span><span class="v">{{ grandDetail().vendu | num }}</span></span>
+          <span class="kpi"><span class="k">Reste</span><span class="v text-muted">{{ grandDetail().reste | num }}</span></span>
+          <span class="kpi min-w-[132px]">
+            <span class="k">Taux de vente</span>
+            <span class="flex items-center gap-2 mt-0.5">
+              <span class="taux-bar"><span [style.width.%]="grandTaux()"></span></span>
+              <span class="text-xs font-semibold tabular" style="color:var(--primary)">{{ grandTaux() | pct }}</span>
+            </span>
+          </span>
+        </button>
+
+        @if (dailyOpen()) {
+          <div class="border-t border-line px-5 pt-4 pb-5">
+            <h3 class="text-base font-semibold text-ink">Recette par jour</h3>
+            <p class="text-sm text-muted mt-0.5 mb-3">{{ dailySubtitle() }}</p>
+            @if (!hasDaily()) {
+              <app-empty-state title="Aucun événement daté à afficher." message="" />
+            } @else {
+              <div echarts theme="fih" [options]="dailyOpt()" class="w-full h-[440px]"></div>
+            }
+          </div>
+        }
+      </div>
+
       <!-- Résumé -->
       <div class="surface-card overflow-hidden mb-8">
         <div class="px-5 py-3 border-b border-line font-semibold text-ink">Recette résumé</div>
@@ -104,7 +175,7 @@ function tnd(v: number): string {
             <table class="text-sm">
               <thead>
                 <tr class="single text-left text-muted">
-                  <th class="px-4 py-3 cursor-pointer select-none" (click)="sortSummary('eventTitle')">Événement {{ caretS('eventTitle') }}</th>
+                  <th class="px-4 py-3 cursor-pointer select-none" (click)="sortSummary('eventDate')">Événement {{ caretS('eventDate') }}</th>
                   <th class="px-4 py-3 text-right cursor-pointer select-none" (click)="sortSummary('billet')">Billet {{ caretS('billet') }}</th>
                   <th class="px-4 py-3 text-right cursor-pointer select-none" (click)="sortSummary('voucher')">Voucher {{ caretS('voucher') }}</th>
                   <th class="px-4 py-3 text-right cursor-pointer select-none" (click)="sortSummary('total')">Total {{ caretS('total') }}</th>
@@ -234,15 +305,6 @@ function tnd(v: number): string {
             }
           </div>
         }
-
-        <!-- Total général (suit le filtre de recherche) -->
-        <div class="surface-card px-5 py-4 flex flex-wrap items-center gap-x-6 gap-y-2 bg-bg">
-          <span class="font-bold text-ink mr-auto">Total général{{ query() ? ' (filtré)' : '' }}</span>
-          <span class="text-sm"><span class="text-muted">Généré</span> <span class="font-semibold text-ink ml-1 tabular">{{ grandDetail().genere | num }}</span></span>
-          <span class="text-sm"><span class="text-muted">Vendu</span> <span class="font-semibold text-ink ml-1 tabular">{{ grandDetail().vendu | num }}</span></span>
-          <span class="text-sm"><span class="text-muted">Reste</span> <span class="font-semibold text-ink ml-1 tabular">{{ grandDetail().reste | num }}</span></span>
-          <span class="text-base font-bold tabular" style="color:var(--primary)">{{ grandDetail().recette | tnd }}</span>
-        </div>
       }
     }
   `,
@@ -264,6 +326,13 @@ function tnd(v: number): string {
     }
     .search-box input { border: none; outline: none; background: transparent; flex: 1; font-size: .875rem; color: var(--ink); }
     .search-box button { border: none; background: transparent; cursor: pointer; }
+    /* Bandeau Total général : liseré d'accent + KPI alignés.
+       Pas de reset de background/border ici : le preflight Tailwind le fait déjà
+       pour les <button>, et le redéclarer entrerait en conflit avec hover:bg-bg. */
+    .hero { border-left: 3px solid var(--primary); }
+    .kpi { display: inline-flex; flex-direction: column; gap: 1px; min-width: 82px; }
+    .kpi .k { font-size: .6875rem; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); white-space: nowrap; }
+    .kpi .v { font-size: 1.0625rem; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; line-height: 1.3; }
     /* Part de la recette totale (résumé) */
     .share-bar { height: 4px; border-radius: 99px; background: var(--line); overflow: hidden; max-width: 220px; }
     .share-bar::after { content: ''; display: block; height: 100%; width: var(--w, 0%); background: var(--primary); }
@@ -289,8 +358,10 @@ export class RecetteComponent implements OnInit {
   view = signal<ViewMode>('chart');
   query = signal('');
 
-  sortKey = signal<SummaryKey>('total');
-  sortAsc = signal(false);
+  // Tri par défaut : chronologique (date d'événement, du plus ancien au plus
+  // récent), cohérent avec la détaillée et la recette par guichet.
+  sortKey = signal<SummaryKey>('eventDate');
+  sortAsc = signal(true);
 
   // Total général (résumé) — calculé côté client, toujours cohérent au tri.
   grand = computed(() => {
@@ -313,33 +384,65 @@ export class RecetteComponent implements OnInit {
     const key = this.sortKey();
     const dir = this.sortAsc() ? 1 : -1;
     return [...this.summary()].sort((a, b) => {
+      if (key === 'eventDate') {
+        // Dates ISO ("2025-07-29") : comparaison lexicale = ordre chronologique.
+        const cmp = (a.eventDate || '').localeCompare(b.eventDate || '');
+        return (cmp !== 0 ? cmp : a.eventTitle.localeCompare(b.eventTitle, 'fr')) * dir;
+      }
       const av = a[key]; const bv = b[key];
       if (typeof av === 'string' && typeof bv === 'string') return av.localeCompare(bv, 'fr') * dir;
       return ((av as number) - (bv as number)) * dir;
     });
   });
 
+  // Panneaux détaillée triés chronologiquement (du plus proche au plus lointain),
+  // côté client, pour ne dépendre d'aucun ordre du serveur. Dates ISO
+  // ("2025-07-29") => comparaison lexicale = ordre chronologique.
+  private headersByDate = computed(() =>
+    [...this.headers()].sort((a, b) => {
+      const cmp = (a.eventDate || '').localeCompare(b.eventDate || '');
+      return cmp !== 0 ? cmp : a.eventTitle.localeCompare(b.eventTitle, 'fr');
+    }));
+
   // Recherche : filtre les panneaux par titre d'événement OU par nom de modèle
   // déjà chargé (un panneau ouvert dont un modèle correspond reste visible).
   filteredHeaders = computed(() => {
     const q = this.norm(this.query());
-    if (!q) return this.headers();
+    const ordered = this.headersByDate();
+    if (!q) return ordered;
     const rows = this.rowsByEvent();
-    return this.headers().filter(h =>
+    return ordered.filter(h =>
       this.norm(h.eventTitle).includes(q) ||
       (rows.get(h.eventId) ?? []).some(r => this.norm(r.modelName).includes(q)));
   });
 
   // ---- Diagrammes (Change A : « Recette par événement » supprimé) ----
 
-  /** Donut Billet / Voucher à partir des totaux de recette. */
+  /**
+   * Donut Billet / Voucher à partir des totaux de recette.
+   *
+   * Le TOTAL est affiché au centre de l'anneau : c'est le trou du donut, il était
+   * vide, et la somme Billet + Voucher n'apparaissait nulle part dans la vue
+   * Diagramme (il fallait basculer sur Tableau pour la lire). Le titre est ancré
+   * sur le centre de la série (['50%', '46%']) et non sur le canevas, sinon la
+   * légende du bas le décalerait.
+   */
   categoryOpt = computed<EChartsOption>(() => {
     const g = this.grand();
     return {
       tooltip: { trigger: 'item', formatter: (p: any) => `${p.name}<br/><b>${tnd(p.value)}</b> (${p.percent}%)` },
       legend: { bottom: 0, icon: 'circle' },
+      title: {
+        text: tnd(g.total),
+        subtext: 'Recette totale',
+        left: '50%',
+        top: '38%',
+        textAlign: 'center',
+        textStyle: { fontSize: 20, fontWeight: 700, color: BRAND.ink },
+        subtextStyle: { fontSize: 12, color: BRAND.muted }
+      },
       series: [{
-        type: 'pie', radius: ['45%', '72%'], avoidLabelOverlap: true,
+        type: 'pie', radius: ['45%', '72%'], center: ['50%', '46%'], avoidLabelOverlap: true,
         itemStyle: { borderColor: '#fff', borderWidth: 2 },
         label: { formatter: (p: any) => tnd(p.value) },
         data: [
@@ -371,12 +474,16 @@ export class RecetteComponent implements OnInit {
   });
 
   /**
-   * Barres HORIZONTALES, une par événement, triées par quantité générée. Chaque
+   * Barres HORIZONTALES, une par événement, en ordre chronologique (du plus
+   * ancien en haut au plus récent en bas), cohérent avec les tableaux. Chaque
    * barre empile Vendu + Reste : sa longueur totale = quantité générée. Bien plus
    * lisible que 34 groupes de 3 barres verticales aux libellés tronqués.
    */
   gvrOpt = computed<EChartsOption>(() => {
-    const rows = [...this.headers()].sort((a, b) => a.totalGenere - b.totalGenere); // asc -> plus gros en haut
+    // Ordre chronologique, cohérent avec les tableaux. L'axe catégoriel d'ECharts
+    // place l'index 0 en bas : on trie donc par date décroissante pour que
+    // l'événement le plus ANCIEN apparaisse en HAUT.
+    const rows = [...this.headers()].sort((a, b) => (b.eventDate || '').localeCompare(a.eventDate || ''));
     const fr = (v: number) => (v || 0).toLocaleString('fr-FR');
     return {
       grid: { left: 12, right: 24, top: 10, bottom: 36, containLabel: true },
@@ -400,6 +507,146 @@ export class RecetteComponent implements OnInit {
 
   /** Hauteur du graphe horizontal : croît avec le nombre d'événements (lisible, sans entassement). */
   gvrHeight = computed(() => Math.max(340, this.headers().length * 26 + 70));
+
+  // ---- Recette par jour (dépliée depuis le bandeau « Total général ») ----
+  //
+  // Agrégée CÔTÉ CLIENT à partir de summary() : RecetteSummary porte déjà
+  // eventDate + billet + voucher + total, donc regrouper par date ne demande
+  // aucun nouvel endpoint. Plusieurs événements peuvent tomber le même jour :
+  // ils sont additionnés et listés dans l'infobulle.
+  //
+  // Le filtre de recherche est respecté (mêmes eventId que filteredHeaders),
+  // pour que le bandeau et son diagramme racontent toujours la même chose.
+
+  dailyOpen = signal(false);
+
+  /** Événements sans date réelle (placeholder époque 1970) : hors chronologie. */
+  private undatedCount = computed(() =>
+    this.summary().filter(r => !realDate(r.eventDate)).length);
+
+  private dailyRows = computed<DailyRow[]>(() => {
+    const filtering = !!this.query();
+    const ids = new Set(this.filteredHeaders().map(h => h.eventId));
+    const map = new Map<string, DailyRow>();
+    for (const r of this.summary()) {
+      if (filtering && !ids.has(r.eventId)) continue;
+      if (!realDate(r.eventDate)) continue;   // 1970 = « pas de date », pas un jour
+      let d = map.get(r.eventDate);
+      if (!d) { d = { date: r.eventDate, billet: 0, voucher: 0, total: 0, events: [] }; map.set(r.eventDate, d); }
+      d.billet += r.billet; d.voucher += r.voucher; d.total += r.total;
+      d.events.push(r.eventTitle);
+    }
+    // Dates ISO => comparaison lexicale = ordre chronologique.
+    return [...map.values()].sort((a, b) => a.date.localeCompare(b.date));
+  });
+
+  hasDaily = computed(() => this.dailyRows().length > 0);
+
+  private dailyStats = computed(() => {
+    const rows = this.dailyRows();
+    if (rows.length === 0) return { days: 0, avg: 0, peak: null as DailyRow | null };
+    const total = rows.reduce((s, r) => s + r.total, 0);
+    const peak = rows.reduce((m, r) => (r.total > m.total ? r : m), rows[0]);
+    return { days: rows.length, avg: total / rows.length, peak };
+  });
+
+  /** Sous-titre du diagramme : nb de jours, moyenne/jour, jour de pic. */
+  dailySubtitle = computed(() => {
+    const s = this.dailyStats();
+    if (s.days === 0) return 'Aucun événement daté à afficher.';
+    const parts = [
+      `${s.days} jour${s.days > 1 ? 's' : ''}`,
+      `moyenne ${tnd(s.avg)} / jour`
+    ];
+    if (s.peak) parts.push(`pic le ${longDay(s.peak.date)} (${tnd(s.peak.total)})`);
+    const u = this.undatedCount();
+    if (u > 0) parts.push(`${u} événement${u > 1 ? 's' : ''} sans date exclu${u > 1 ? 's' : ''}`);
+    return parts.join(' · ');
+  });
+
+  /**
+   * Barres VERTICALES empilées Billet + Voucher par jour, plus la courbe de
+   * cumul sur un second axe. Un dataZoom apparaît au-delà de 20 jours pour que
+   * les libellés restent lisibles au lieu de s'écraser.
+   */
+  dailyOpt = computed<EChartsOption>(() => {
+    const rows = this.dailyRows();
+    const grandTotal = rows.reduce((s, r) => s + r.total, 0);
+    let run = 0;
+    const cumul = rows.map(r => (run += r.total));
+    const opt: EChartsOption = {
+      grid: { left: 12, right: 20, top: 24, bottom: rows.length > 20 ? 84 : 60, containLabel: true },
+      tooltip: {
+        trigger: 'axis',
+        axisPointer: { type: 'shadow' },
+        formatter: (ps: any) => {
+          const i = ps[0].dataIndex;
+          const r = rows[i];
+          const pct = grandTotal > 0
+            ? (r.total / grandTotal * 100).toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+            : '0,0';
+          const shown = r.events.slice(0, 6).map(t => `• ${t}`).join('<br/>');
+          const more = r.events.length > 6 ? `<br/>+ ${r.events.length - 6} autre(s)` : '';
+          const rule = `<div style="border-top:1px solid ${BRAND.line};margin:6px 0"></div>`;
+          return `<b>${longDay(r.date)}</b><br/>`
+            + `<span style="color:${BRAND.muted}">${r.events.length} événement${r.events.length > 1 ? 's' : ''}</span><br/>`
+            + shown + more
+            + rule
+            + `Billet <b>${tnd(r.billet)}</b><br/>`
+            + `Voucher <b>${tnd(r.voucher)}</b>`
+            + rule
+            + `Total <b>${tnd(r.total)}</b> <span style="color:${BRAND.muted}">(${pct} % du total)</span><br/>`
+            + `Cumul <b>${tnd(cumul[i])}</b>`;
+        }
+      },
+      legend: { bottom: 0, icon: 'circle' },
+      xAxis: {
+        type: 'category',
+        data: rows.map(r => shortDay(r.date)),
+        axisLabel: { rotate: rows.length > 12 ? 45 : 0, hideOverlap: true }
+      },
+      yAxis: [
+        {
+          type: 'value', name: 'Recette · TND', nameTextStyle: { color: BRAND.muted, align: 'left' },
+          axisLabel: { formatter: (v: number) => (v >= 1000 ? v / 1000 + 'k' : String(v)) }
+        },
+        {
+          type: 'value', name: 'Cumul · TND', nameTextStyle: { color: BRAND.muted, align: 'right' },
+          axisLabel: { formatter: (v: number) => (v >= 1000 ? v / 1000 + 'k' : String(v)) },
+          splitLine: { show: false }
+        }
+      ],
+      series: [
+        {
+          name: 'Billet', type: 'bar', stack: 'r', barMaxWidth: 34,
+          itemStyle: { color: SERIES_COLORS[0] }, data: rows.map(r => r.billet)
+        },
+        {
+          name: 'Voucher', type: 'bar', stack: 'r', barMaxWidth: 34,
+          itemStyle: { color: SERIES_COLORS[1], borderRadius: [4, 4, 0, 0] }, data: rows.map(r => r.voucher)
+        },
+        {
+          name: 'Cumul', type: 'line', yAxisIndex: 1, smooth: true,
+          symbol: 'circle', symbolSize: 6,
+          lineStyle: { width: 2, type: 'dashed' }, itemStyle: { color: SERIES_COLORS[3] },
+          data: cumul
+        }
+      ]
+    };
+    // Au-delà de ~20 jours, l'axe devient illisible : on ajoute un curseur.
+    if (rows.length > 20) {
+      opt.dataZoom = [{ type: 'slider', bottom: 30, height: 18, start: 0, end: 100 }];
+    }
+    return opt;
+  });
+
+  /** Taux de vente global (bandeau) — cohérent avec les totaux affichés. */
+  grandTaux = computed(() => {
+    const d = this.grandDetail();
+    return d.genere > 0 ? (d.vendu / d.genere) * 100 : 0;
+  });
+
+  toggleDaily(): void { this.dailyOpen.update(v => !v); }
 
   constructor(private stats: StatsService) {}
 
@@ -552,7 +799,7 @@ export class RecetteComponent implements OnInit {
 
   sortSummary(key: SummaryKey): void {
     if (this.sortKey() === key) this.sortAsc.update(v => !v);
-    else { this.sortKey.set(key); this.sortAsc.set(key === 'eventTitle'); }
+    else { this.sortKey.set(key); this.sortAsc.set(key === 'eventDate' || key === 'eventTitle'); }
   }
   caretS(key: SummaryKey): string { return this.sortKey() === key ? (this.sortAsc() ? '▲' : '▼') : ''; }
 }

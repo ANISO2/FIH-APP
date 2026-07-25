@@ -17,6 +17,9 @@ class TourniquetRow {
   final int billetTransactions;
   final int voucherTransactions;
 
+  /// Ticket-type family set by the backend: "INVITATION" | "GRADINS" | "AUTRE".
+  final String category;
+
   const TourniquetRow({
     required this.modelId,
     required this.modelName,
@@ -25,7 +28,11 @@ class TourniquetRow {
     required this.audience,
     required this.billetTransactions,
     required this.voucherTransactions,
+    required this.category,
   });
+
+  /// The two types the mobile stats are scoped to (Invitation + Billet Gradins).
+  bool get isCounted => category == 'INVITATION' || category == 'GRADINS';
 
   factory TourniquetRow.fromJson(Map<String, dynamic> j) => TourniquetRow(
         modelId: _i(j['modelId']),
@@ -35,6 +42,7 @@ class TourniquetRow {
         audience: _i(j['audience']),
         billetTransactions: _i(j['billetTransactions']),
         voucherTransactions: _i(j['voucherTransactions']),
+        category: (j['category'] as String?) ?? 'AUTRE',
       );
 }
 
@@ -65,8 +73,20 @@ class TourniquetEvent {
     required this.rows,
   });
 
-  /// Présence = entrées / émis, 0..100.
+  /// Présence = entrées / émis, 0..100 (all types).
   double get presence => audience == 0 ? 0 : (tourniquets / audience) * 100.0;
+
+  // ---- Scoped to the 2 types (Invitation + Billet Gradins) ------------------
+  List<TourniquetRow> get countedRows => rows.where((r) => r.isCounted).toList(growable: false);
+  int get audience2 => countedRows.fold(0, (s, r) => s + r.audience);
+  int get billets2 => countedRows.fold(0, (s, r) => s + r.billetTransactions);
+  int get vouchers2 => countedRows.fold(0, (s, r) => s + r.voucherTransactions);
+  int get tourniquets2 => billets2 + vouchers2;
+  double get presence2 => audience2 == 0 ? 0 : (tourniquets2 / audience2) * 100.0;
+
+  int entriesForCategory(String cat) => rows
+      .where((r) => r.category == cat)
+      .fold(0, (s, r) => s + r.billetTransactions + r.voucherTransactions);
 
   factory TourniquetEvent.fromJson(Map<String, dynamic> j) => TourniquetEvent(
         eventId: _i(j['eventId']),

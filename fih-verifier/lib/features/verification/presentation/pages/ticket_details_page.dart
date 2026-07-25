@@ -189,30 +189,26 @@ class _TicketDetailsPageState extends State<TicketDetailsPage> {
                 return _hint('Service externe injoignable pour le moment.');
               }
               final info = snap.data!;
-              if (info.isPending) {
-                return Row(
-                  children: [
-                    const Icon(Icons.cloud_sync_rounded, color: AppColors.accent),
-                    const SizedBox(width: Gap.sm),
-                    Expanded(
-                      child: Text(
-                        info.message ?? 'Intégration à venir — vérification déléguée au service externe.',
-                        style: TextStyle(color: Colors.black.withValues(alpha: 0.7)),
-                      ),
-                    ),
-                  ],
-                );
-              }
               if (info.isNotFound) {
-                return _hint('Voucher inconnu du service externe.');
+                return _hint('Billet inconnu du service externe.');
+              }
+              if (info.isUnavailable) {
+                return _hint(info.message ?? 'Service externe momentanément indisponible.');
               }
               return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _kv('Modèle', info.model ?? '—'),
-                  _kv('Prix', Formatters.money(info.prix)),
-                  _kv('Vendu', info.vendu == null ? '—' : (info.vendu! ? 'Oui' : 'Non')),
-                  _kv('Date de vente', Formatters.shortDate(info.dateVente)),
-                  _kv('Compteur d\'accès', info.accessCounter?.toString() ?? '—'),
+                  if (info.isError && (info.message?.isNotEmpty ?? false))
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: Gap.sm),
+                      child: _hint(info.message!),
+                    ),
+                  _kv('Utilisé', info.used == null ? '—' : (info.used! ? 'Oui' : 'Non')),
+                  _kv("Date d'utilisation", _txt(info.usedDate)),
+                  _kv('Ticket', _txt(info.ticket)),
+                  _kv('CIN', _txt(info.ticketCin)),
+                  _kv('Prénom', _txt(info.prenom)),
+                  _kv('Nom', _txt(info.nom)),
                 ],
               );
             },
@@ -233,6 +229,9 @@ class _TicketDetailsPageState extends State<TicketDetailsPage> {
   Widget _sectionTitle(String t) => Text(t.toUpperCase(),
       style: const TextStyle(
           color: AppColors.primary, fontWeight: FontWeight.w700, fontSize: 13, letterSpacing: 0.5));
+
+  // "—" for null/blank external strings.
+  static String _txt(String? v) => (v == null || v.trim().isEmpty) ? '—' : v;
 
   Widget _kv(String k, String v) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 3),

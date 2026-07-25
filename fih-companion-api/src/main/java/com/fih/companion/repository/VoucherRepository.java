@@ -43,6 +43,16 @@ public interface VoucherRepository extends JpaRepository<Voucher, String> {
             """, nativeQuery = true)
     Optional<VoucherVerifyProjection> findForVerification(@Param("code") String code);
 
+    /** Event reference for a scanned voucher — used as the external product_id. */
+    @Query(value = """
+            SELECT v.evenement
+            FROM voucher v
+            WHERE v.codebarre = :code OR v.numeroserie = :code
+            ORDER BY (v.codebarre = :code) DESC
+            LIMIT 1
+            """, nativeQuery = true)
+    Optional<Integer> findEventIdByCode(@Param("code") String code);
+
 
     @Query(value = """
             SELECT v.numeroserie  AS "numeroserie",

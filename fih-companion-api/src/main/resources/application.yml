@@ -59,8 +59,25 @@ fih:
     connect-timeout-ms: ${FIH_VOUCHER_CONNECT_TIMEOUT_MS:2000}
     read-timeout-ms:    ${FIH_VOUCHER_READ_TIMEOUT_MS:3000}
 
+  # ===========================================================================
+  # External TICKET-VERIFY web service (équipe festivaldehammamet.com).
+  # Powers the mobile "Info voucher" screen: on a voucher scan we POST
+  # {qrcode, product_id} and surface the returned holder / used status.
+  # The API key is externalized; the default below lets it run out of the box,
+  # but SET FIH_TICKET_VERIFY_API_KEY in the server env and rotate the key.
+  # ===========================================================================
+  ticket-verify:
+    base-url: ${FIH_TICKET_VERIFY_BASE_URL:https://Festivaldehammamet.com/api/ticket/verify}
+    api-key:  ${FIH_TICKET_VERIFY_API_KEY:647709c453a5a5-17951949-77407334}
+    connect-timeout-ms: ${FIH_TICKET_VERIFY_CONNECT_TIMEOUT_MS:50000}
+    read-timeout-ms:    ${FIH_TICKET_VERIFY_READ_TIMEOUT_MS:40000}
+
   stats:
     cache-ttl-seconds: ${FIH_STATS_CACHE_TTL:30}
+    # Models treated as "Billet Gradins" in the tourniquet stats. For these,
+    # "Émis" counts tickets actually SOLD (vendu=true), not merely generated;
+    # every other model keeps counting generated codes. Comma-separated.
+    gradins-model-ids: ${FIH_GRADINS_MODELS:22}
 
   photos:
     folder: ${FIH_PHOTOS_FOLDER:./photos}

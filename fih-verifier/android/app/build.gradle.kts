@@ -36,9 +36,12 @@ android {
     defaultConfig {
         applicationId = "com.bitaka.fih_verifier"
         // mobile_scanner 7.x AND audioplayers 6.x both require Android API 23
-        // (Marshmallow) as their minimum. Flutter's default (flutter.minSdkVersion)
-        // is 21, which makes the manifest-merger / AAR-metadata check FAIL at build
-        // time. Pin to 23 so a release build actually compiles.
+        // (Marshmallow) as their minimum, enforced via AAR metadata. Relying on
+        // flutter.minSdkVersion means the floor silently follows whatever the
+        // installed Flutter SDK defaults to — the day that default drops below 23
+        // (it was 21 for years), the manifest-merger / AAR-metadata check FAILS at
+        // build time. Pinned explicitly so the build no longer depends on the
+        // toolchain's default matching this requirement by coincidence.
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         // Derived from pubspec.yaml `version:` (currently 1.0.0+1). Bump there.
